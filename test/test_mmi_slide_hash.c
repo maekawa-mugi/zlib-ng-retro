@@ -89,51 +89,51 @@ int main(void) {
         Pos wsize = sizes[size_index];
         for (unsigned offset = 0; offset < 8; offset++) {
             for (unsigned variant = 0; variant < 3; variant++) {
-            s->w_size = wsize;
-            s->head = aligned_with_offset(hraw, offset);
-            s->prev = aligned_with_offset(praw, (offset + 3u) & 7u);
+                s->w_size = wsize;
+                s->head = aligned_with_offset(hraw, offset);
+                s->prev = aligned_with_offset(praw, (offset + 3u) & 7u);
 
-            /* Ensure the vector fast path never alters bytes outside the table. */
-            s->head[-1] = 0xa55a;
-            s->head[HASH_SIZE] = 0x5aa5;
-            s->prev[-1] = 0xa55a;
-            s->prev[wsize] = 0x5aa5;
+                /* Ensure the vector fast path never alters bytes outside the table. */
+                s->head[-1] = 0xa55a;
+                s->head[HASH_SIZE] = 0x5aa5;
+                s->prev[-1] = 0xa55a;
+                s->prev[wsize] = 0x5aa5;
 
-            for (uint32_t i = 0; i < HASH_SIZE; i++)
-                s->head[i] = next_value(wsize, i);
-            for (uint32_t i = 0; i < wsize; i++)
-                s->prev[i] = next_value(wsize, i);
+                for (uint32_t i = 0; i < HASH_SIZE; i++)
+                    s->head[i] = next_value(wsize, i);
+                for (uint32_t i = 0; i < wsize; i++)
+                    s->prev[i] = next_value(wsize, i);
 
-            memcpy(hexp, s->head, head_bytes);
-            memcpy(pexp, s->prev, (size_t)wsize * sizeof(Pos));
-            memcpy(prev_original, s->prev, (size_t)wsize * sizeof(Pos));
-            reference_slide(hexp, HASH_SIZE, wsize);
-            reference_slide(pexp, wsize, wsize);
+                memcpy(hexp, s->head, head_bytes);
+                memcpy(pexp, s->prev, (size_t)wsize * sizeof(Pos));
+                memcpy(prev_original, s->prev, (size_t)wsize * sizeof(Pos));
+                reference_slide(hexp, HASH_SIZE, wsize);
+                reference_slide(pexp, wsize, wsize);
 
-            full[variant](s);
-            if (first_mismatch(s->head, hexp, HASH_SIZE) >= 0 ||
-                first_mismatch(s->prev, pexp, wsize) >= 0 ||
-                s->head[-1] != 0xa55a || s->head[HASH_SIZE] != 0x5aa5 ||
-                s->prev[-1] != 0xa55a || s->prev[wsize] != 0x5aa5) {
-                printf("MMI slide_hash failed: wsize=%u offset=%u variant=%u\n", (unsigned)wsize, offset, variant);
-                return 1;
-            }
+                full[variant](s);
+                if (first_mismatch(s->head, hexp, HASH_SIZE) >= 0 ||
+                    first_mismatch(s->prev, pexp, wsize) >= 0 ||
+                    s->head[-1] != 0xa55a || s->head[HASH_SIZE] != 0x5aa5 ||
+                    s->prev[-1] != 0xa55a || s->prev[wsize] != 0x5aa5) {
+                    printf("MMI slide_hash failed: wsize=%u offset=%u variant=%u\n", (unsigned)wsize, offset, variant);
+                    return 1;
+                }
 
-            /* Reconstruct input and verify head-only sliding does not touch prev. */
-            for (uint32_t i = 0; i < HASH_SIZE; i++)
-                s->head[i] = next_value(wsize, i);
-            memcpy(hexp, s->head, head_bytes);
-            reference_slide(hexp, HASH_SIZE, wsize);
-            memcpy(s->prev, prev_original, (size_t)wsize * sizeof(Pos));
+                /* Reconstruct input and verify head-only sliding does not touch prev. */
+                for (uint32_t i = 0; i < HASH_SIZE; i++)
+                    s->head[i] = next_value(wsize, i);
+                memcpy(hexp, s->head, head_bytes);
+                reference_slide(hexp, HASH_SIZE, wsize);
+                memcpy(s->prev, prev_original, (size_t)wsize * sizeof(Pos));
 
-            head_only[variant](s);
-            if (first_mismatch(s->head, hexp, HASH_SIZE) >= 0 ||
-                first_mismatch(s->prev, prev_original, wsize) >= 0 ||
-                s->head[-1] != 0xa55a || s->head[HASH_SIZE] != 0x5aa5 ||
-                s->prev[-1] != 0xa55a || s->prev[wsize] != 0x5aa5) {
-                printf("MMI head-only failed: wsize=%u offset=%u variant=%u\n", (unsigned)wsize, offset, variant);
-                return 1;
-            }
+                head_only[variant](s);
+                if (first_mismatch(s->head, hexp, HASH_SIZE) >= 0 ||
+                    first_mismatch(s->prev, prev_original, wsize) >= 0 ||
+                    s->head[-1] != 0xa55a || s->head[HASH_SIZE] != 0x5aa5 ||
+                    s->prev[-1] != 0xa55a || s->prev[wsize] != 0x5aa5) {
+                    printf("MMI head-only failed: wsize=%u offset=%u variant=%u\n", (unsigned)wsize, offset, variant);
+                    return 1;
+                }
             }
         }
     }
