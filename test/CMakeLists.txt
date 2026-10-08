@@ -152,6 +152,55 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
             target_link_libraries(bench_mmi_adler32_copy zlib-ng)
         endif()
     endif()
+
+    # Package every native MMI correctness test and benchmark into one EE
+    # executable for one PS2 Linux validation trip. Existing standalone
+    # executables continue to work unchanged: the suite compiles separate
+    # object copies with the source's main() renamed to a unique entrypoint.
+    add_executable(mmi_suite mmi_suite.c)
+    configure_test_executable(mmi_suite)
+    if(NOT DEFINED BUILD_SHARED_LIBS)
+        target_link_libraries(mmi_suite zlib-ng-static)
+    else()
+        target_link_libraries(mmi_suite zlib-ng)
+    endif()
+
+    set(_mmi_suite_tests slide_hash compare256 chunkset roundtrip adler32_math)
+    set(_mmi_suite_benches slide_hash chunkset roundtrip)
+    if(WITH_MMI_COMPARE64)
+        list(APPEND _mmi_suite_benches compare256)
+    endif()
+    if(WITH_MMI_ADLER32)
+        list(APPEND _mmi_suite_tests adler32)
+        list(APPEND _mmi_suite_benches adler32 adler32_copy)
+    endif()
+    if(WITH_MMI_CHORBA)
+        list(APPEND _mmi_suite_tests chorba)
+        list(APPEND _mmi_suite_benches chorba chorba_copy)
+    endif()
+
+    foreach(_mmi_kernel IN LISTS _mmi_suite_tests)
+        set(_mmi_obj "mmi_suite_test_${_mmi_kernel}_obj")
+        add_library(${_mmi_obj} OBJECT "test_mmi_${_mmi_kernel}.c")
+        target_include_directories(${_mmi_obj} PRIVATE
+            ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+        target_compile_definitions(${_mmi_obj} PRIVATE
+            "main=mmi_suite_test_${_mmi_kernel}_main")
+        target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}>)
+    endforeach()
+    foreach(_mmi_kernel IN LISTS _mmi_suite_benches)
+        set(_mmi_obj "mmi_suite_bench_${_mmi_kernel}_obj")
+        add_library(${_mmi_obj} OBJECT "bench_mmi_${_mmi_kernel}.c")
+        target_include_directories(${_mmi_obj} PRIVATE
+            ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+        target_compile_definitions(${_mmi_obj} PRIVATE
+            "main=mmi_suite_bench_${_mmi_kernel}_main")
+        target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}>)
+    endforeach()
+
+    # The unified runner is intentionally NOT added to CTest by default:
+    # normal cross-builds lack a PS2 Linux emulator, and standalone tests
+    # are already registered. Execute the binary with --all on hardware.
 endif()
 
 add_executable(example example.c)
