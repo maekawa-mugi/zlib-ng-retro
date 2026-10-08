@@ -38,13 +38,28 @@ static int run_case(const uint8_t *src, size_t len, uint32_t seed,
     }
 
     memcpy(snapshot, src, len);
-    memset(copy, 0xa5, len + 1);
-    got = crc32_copy_chorba_mmi(seed, copy, src, len);
-    if (got != expected || memcmp(copy, src, len) != 0 ||
-        copy[len] != 0xa5 || memcmp(src, snapshot, len) != 0) {
-        printf("MMI Chorba copy/input modification FAIL len=%lu align=%u\n",
-               (unsigned long)len, alignment);
-        return 1;
+    /* Exercise production, original two-pass, and fused copy directly.
+     * Even input residues match destination alignment in the fused case,
+     * odd residues deliberately mismatch to exercise scalar copy tails. */
+    for (unsigned variant = 0; variant < 3; ++variant) {
+        unsigned dstoff = variant == 0 ? 0 :
+                          variant == 1 ? ((alignment + 5u) & 15u) :
+                          (alignment & 1u) ? ((alignment + 9u) & 15u) : alignment;
+        uint8_t *dst = copy + dstoff;
+        memset(copy, 0xa5, sizeof(copy));
+        if (variant == 0)
+            got = crc32_copy_chorba_mmi(seed, dst, src, len);
+        else if (variant == 1)
+            got = crc32_copy_chorba_mmi_twopass(seed, dst, src, len);
+        else
+            got = crc32_copy_chorba_mmi_fused(seed, dst, src, len);
+        if (got != expected || memcmp(dst, src, len) != 0 ||
+            dst[len] != 0xa5 || (dstoff && dst[-1] != 0xa5) ||
+            memcmp(src, snapshot, len) != 0) {
+            printf("MMI Chorba copy FAIL len=%lu align=%u destoff=%u variant=%u\n",
+                   (unsigned long)len, alignment, dstoff, variant);
+            return 1;
+        }
     }
 
     /* Streaming calls must match one-shot CRC regardless of split. */
