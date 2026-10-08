@@ -62,8 +62,11 @@ cmake -S . -B build-ee-adler \
 cmake --build build-ee-adler --target test_mmi_adler32 bench_mmi_adler32
 
 # Optional 64-byte compare prefilter (benchmark on EE before adopting):
-# cmake -S . -B build-ee-compare64 <your original EE toolchain options> \\
-#   -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON
+cmake -S . -B build-ee-compare64 \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+cmake --build build-ee-compare64 --target test_mmi_compare256 bench_mmi_compare256
 ```
 
 `WITH_MMI` is OFF by default. When enabled, CMake requires a working
@@ -173,3 +176,18 @@ checks every mismatch offset and all input alignment residues; the benchmark
 also compares the optional 64-byte prefilter against generic C at different
 match lengths and offsets. Its ratio is generic ticks divided by MMI ticks.
 Both `WITH_MMI_COMPARE64` and `WITH_MMI_ADLER32` remain OFF by default.
+
+## Architecture-independent Adler-32 math test
+
+The weighted-sum helper is pure C, and its arithmetic is testable on a
+normal workstation even if the EE cross compiler is not installed:
+
+```sh
+cc -std=c11 -O2 -Wall -Wextra -Werror \
+  -o test_mmi_adler32_math test/test_mmi_adler32_math.c
+./test_mmi_adler32_math
+```
+
+This test checks the scalar model of MMI's halfword pairs, modulo bounds,
+input alignment and streaming split behavior. Passing it does **not**
+validate the actual EE instructions; those still require PS2 execution.

@@ -2,7 +2,7 @@
  * No PS2 instructions are executed. This checks the pair-lane formula,
  * alignment peeling, NMAX bounds, stream splitting and modulo handling.
  *
- * cc -std=c11 -O2 -Wall -Wextra -Werror \\
+ * cc -std=c11 -O2 -Wall -Wextra -Werror \
  *   -o test_mmi_adler32_math test/test_mmi_adler32_math.c
  * ./test_mmi_adler32_math
  */
