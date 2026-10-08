@@ -10,9 +10,15 @@
 #endif
 
 uint8_t *Z_INTERNAL chunkmemset_safe_mmi(uint8_t *, uint8_t *, size_t, size_t);
+uint8_t *Z_INTERNAL chunkmemset_safe_mmi_serial(uint8_t *, uint8_t *, size_t, size_t);
+uint8_t *Z_INTERNAL chunkmemset_safe_mmi_burst(uint8_t *, uint8_t *, size_t, size_t);
 
 static uint8_t actual[1024] ALIGNED_(16);
 static uint8_t expected[1024] ALIGNED_(16);
+typedef uint8_t *(*copy_fn)(uint8_t *, uint8_t *, size_t, size_t);
+static copy_fn const variants[] = {
+    chunkmemset_safe_mmi, chunkmemset_safe_mmi_serial, chunkmemset_safe_mmi_burst
+};
 
 static int run(unsigned direction, unsigned dist, unsigned length,
                unsigned left, unsigned offset) {
@@ -22,8 +28,6 @@ static int run(unsigned direction, unsigned dist, unsigned length,
     for (unsigned i = 0; i < sizeof(actual); i++)
         actual[i] = expected[i] = (uint8_t)(i * 43u + (i >> 3) * 17u);
 
-    uint8_t *end = chunkmemset_safe_mmi(actual + outpos, actual + frompos,
-                                        length, left);
     if (direction == 1 && dist < n) {
         memmove(expected + outpos, expected + frompos, n);
     } else {
@@ -32,10 +36,16 @@ static int run(unsigned direction, unsigned dist, unsigned length,
             expected[outpos + i] = expected[frompos + i];
     }
 
-    if (end != actual + outpos + n || memcmp(actual, expected, sizeof(actual))) {
-        printf("MMI copy: FAIL direction=%u dist=%u len=%u left=%u offset=%u\n",
-               direction, dist, length, left, offset);
-        return 1;
+    for (unsigned variant = 0; variant < sizeof(variants)/sizeof(variants[0]); ++variant) {
+        for (unsigned i = 0; i < sizeof(actual); i++)
+            actual[i] = (uint8_t)(i * 43u + (i >> 3) * 17u);
+        uint8_t *end = variants[variant](actual + outpos, actual + frompos,
+                                          length, left);
+        if (end != actual + outpos + n || memcmp(actual, expected, sizeof(actual))) {
+            printf("MMI copy: FAIL variant=%u direction=%u dist=%u len=%u left=%u offset=%u\n",
+                   variant, direction, dist, length, left, offset);
+            return 1;
+        }
     }
     return 0;
 }
@@ -54,6 +64,6 @@ int main(void) {
                         run(direction, dists[d], len, len/2, offset))
                         return 1;
                 }
-    puts("MMI chunkmemset_safe: PASS");
+    puts("MMI chunkmemset_safe: PASS (selected, serial, burst)");
     return 0;
 }
