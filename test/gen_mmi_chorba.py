@@ -43,10 +43,10 @@ def reverse_with_matrix(crc):
     return result
 
 
-def chorba_model(crc, data, alignment=0):
+def chorba_model(crc, data, alignment=0, threshold=4096):
     """Pure-Python, 128-bit-lane-equivalent emulation of the MMI Chorba loop."""
     peel = (-alignment) & 15
-    if len(data) < 4096 + peel:
+    if len(data) < threshold + peel:
         return zlib.crc32(data, crc)
     crc = zlib.crc32(data[:peel], crc)
     data = data[peel:]
@@ -87,19 +87,23 @@ def main():
         after = (~zlib.crc32(bytes(RESIDUE), (~value) & U32)) & U32
         assert reverse_with_matrix(after) == value
 
-    lengths = (0, 1, 16, 63, 4095, 4096, 4097, 4113, 8192,
-               8193, 16384, 65536, 131072)
+    lengths = (0, 1, 16, 63, 1023, 1024, 1025, 2048,
+               4095, 4096, 4097, 4113, 8191, 8192, 8193,
+               16384, 65536, 131072)
     seeds = (0, 1, 0xFFFFFFFF, 0x12345678)
     tested = 0
-    for alignment in (0, 1, 7, 15):
-        for length in lengths:
-            payload = bytes(rng.getrandbits(8) for _ in range(length))
-            for seed in seeds:
-                expected = zlib.crc32(payload, seed)
-                got = chorba_model(seed, payload, alignment)
-                assert got == expected, (alignment, length, hex(seed),
-                                         hex(got), hex(expected))
-                tested += 1
+    for threshold in (1024, 4096, 8192):
+        for alignment in (0, 1, 7, 15):
+            for length in lengths:
+                if threshold != 4096 and length > 16384:
+                    continue  # Large-frame default CRC model already covered.
+                payload = bytes(rng.getrandbits(8) for _ in range(length))
+                for seed in seeds:
+                    expected = zlib.crc32(payload, seed)
+                    got = chorba_model(seed, payload, alignment, threshold)
+                    assert got == expected, (threshold, alignment, length,
+                                             hex(seed), hex(got), hex(expected))
+                    tested += 1
 
     print("Reflected GF(2) polynomial: 0x%X" % zero_poly)
     print("MMI XOR taps (bytes):", TAPS)
