@@ -148,7 +148,10 @@ static int test_crc(void) {
         uint32_t reference = crc32_braid(initial, src, length);
         if (crc32_chorba_mmi(initial, src, length) != reference ||
             crc32_chorba_mmi_single(initial, src, length) != reference ||
-            crc32_chorba_mmi_paired(initial, src, length) != reference) {
+            crc32_chorba_mmi_paired(initial, src, length) != reference ||
+            crc32_chorba_mmi_threshold1024(initial, src, length) != reference ||
+            crc32_chorba_mmi_threshold4096(initial, src, length) != reference ||
+            crc32_chorba_mmi_threshold8192(initial, src, length) != reference) {
             printf("MMI stress Chorba FAIL trial=%u len=%lu seed=%08lx\n",
                    trial, (unsigned long)length, (unsigned long)rng);
             return 1;
