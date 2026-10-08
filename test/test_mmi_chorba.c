@@ -29,11 +29,16 @@ static int run_case(const uint8_t *src, size_t len, uint32_t seed,
     uint32_t got = crc32_chorba_mmi(seed, src, len);
     uint32_t single = crc32_chorba_mmi_single(seed, src, len);
     uint32_t paired = crc32_chorba_mmi_paired(seed, src, len);
-    if (expected != got || expected != single || expected != paired) {
-        printf("MMI Chorba FAIL len=%lu align=%u seed=%08lx ref=%08lx got=%08lx single=%08lx paired=%08lx\n",
+    uint32_t t1024 = crc32_chorba_mmi_threshold1024(seed, src, len);
+    uint32_t t4096 = crc32_chorba_mmi_threshold4096(seed, src, len);
+    uint32_t t8192 = crc32_chorba_mmi_threshold8192(seed, src, len);
+    if (expected != got || expected != single || expected != paired ||
+        expected != t1024 || expected != t4096 || expected != t8192) {
+        printf("MMI Chorba FAIL len=%lu align=%u seed=%08lx ref=%08lx selected=%08lx single=%08lx paired=%08lx t1024=%08lx t4096=%08lx t8192=%08lx\n",
                (unsigned long)len, alignment, (unsigned long)seed,
                (unsigned long)expected, (unsigned long)got,
-               (unsigned long)single, (unsigned long)paired);
+               (unsigned long)single, (unsigned long)paired,
+               (unsigned long)t1024, (unsigned long)t4096, (unsigned long)t8192);
         return 1;
     }
 
@@ -76,8 +81,9 @@ static int run_case(const uint8_t *src, size_t len, uint32_t seed,
 
 int main(void) {
     static const size_t lengths[] = {
-        0, 1, 15, 16, 31, 63, 256, 1024, 4095, 4096,
-        4097, 8191, 8192, 8193, 16384, 32768, 65536, 262144
+        0, 1, 15, 16, 31, 63, 256, 1023, 1024, 1025,
+        2048, 4095, 4096, 4097, 8191, 8192, 8193,
+        16384, 32768, 65536, 262144
     };
     static const uint32_t seeds[] = {0u, 1u, 0xffffffffu, 0x12345678u};
 
