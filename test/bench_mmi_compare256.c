@@ -36,7 +36,7 @@ int main(void) {
         a[i] = b[i] = (uint8_t)(i * 57u + 13u);
     printf("MMI compare256 A/B CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("offset mismatch generic_ticks MMI_ticks ratio_generic_over_MMI");
+    puts("offset mismatch generic_ticks plain16_ticks prefilter64_ticks ratio_generic_plain ratio_generic_prefilter64");
 
     for (unsigned oi = 0; oi < sizeof(offsets)/sizeof(offsets[0]); oi++) {
         for (unsigned mi = 0; mi < sizeof(mismatches)/sizeof(mismatches[0]); mi++) {
@@ -46,26 +46,31 @@ int main(void) {
             if (mismatch < 256)
                 y[mismatch] ^= 0x80u;
             uint32_t expected = compare256_c(x, y);
-            uint32_t got = compare256_mmi(x, y);
-            if (expected != mismatch || got != mismatch) {
-                printf("MMI compare benchmark FAIL offset=%u mismatch=%u generic=%u mmi=%u\n",
-                       offset, mismatch, expected, got);
+            uint32_t plain = compare256_mmi_plain(x, y);
+            uint32_t prefilter = compare256_mmi_prefilter64(x, y);
+            if (expected != mismatch || plain != mismatch ||
+                prefilter != mismatch || compare256_mmi(x, y) != mismatch) {
+                printf("MMI compare benchmark FAIL offset=%u mismatch=%u generic=%u plain=%u prefilter64=%u\n",
+                       offset, mismatch, expected, plain, prefilter);
                 return 1;
             }
-            clock_t tgeneric, tmmi;
+            clock_t tgeneric, tplain, t64;
             if ((oi + mi) & 1u) {
-                tmmi = run(compare256_mmi, x, y, 100000u);
+                t64 = run(compare256_mmi_prefilter64, x, y, 100000u);
+                tplain = run(compare256_mmi_plain, x, y, 100000u);
                 tgeneric = run(compare256_c, x, y, 100000u);
             } else {
                 tgeneric = run(compare256_c, x, y, 100000u);
-                tmmi = run(compare256_mmi, x, y, 100000u);
+                tplain = run(compare256_mmi_plain, x, y, 100000u);
+                t64 = run(compare256_mmi_prefilter64, x, y, 100000u);
             }
-            if (tgeneric <= 0 || tmmi <= 0) {
+            if (tgeneric <= 0 || tplain <= 0 || t64 <= 0) {
                 printf("%u %u clock_unavailable_or_too_coarse\n", offset, mismatch);
             } else {
-                printf("%u %u %ld %ld %.3f\n", offset, mismatch,
-                       (long)tgeneric, (long)tmmi,
-                       (double)tgeneric / (double)tmmi);
+                printf("%u %u %ld %ld %ld %.3f %.3f\n", offset, mismatch,
+                       (long)tgeneric, (long)tplain, (long)t64,
+                       (double)tgeneric / (double)tplain,
+                       (double)tgeneric / (double)t64);
             }
             if (mismatch < 256)
                 y[mismatch] ^= 0x80u;
