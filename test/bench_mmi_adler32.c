@@ -42,34 +42,39 @@ int main(void) {
     }
     printf("MMI Adler-32 A/B, CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("length offset iterations C_ticks MMI_ticks ratio_C_to_MMI");
+    puts("length offset iterations C_ticks prefix_ticks formula_ticks C_over_prefix C_over_formula");
     for (unsigned index = 0; index < sizeof(lengths)/sizeof(lengths[0]); ++index) {
         for (unsigned offset = 0; offset < 2; ++offset) {
             const uint8_t *p = source + offset;
             size_t n = lengths[index];
             unsigned count = iterations[index];
-            if (adler32_c(1u, p, n) != adler32_mmi(1u, p, n)) {
+            uint32_t expected = adler32_c(1u, p, n);
+            if (expected != adler32_mmi_prefix(1u, p, n) ||
+                expected != adler32_mmi_formula(1u, p, n)) {
                 printf("checksum mismatch len=%lu offset=%u\n",
                        (unsigned long)n, offset);
                 return 1;
             }
             /* Alternate order to reduce cache/warmup bias. */
-            clock_t tc, tm;
+            clock_t tc, tp, tf;
             if ((index + offset) & 1u) {
-                tm = bench(adler32_mmi, p, n, count);
+                tf = bench(adler32_mmi_formula, p, n, count);
+                tp = bench(adler32_mmi_prefix, p, n, count);
                 tc = bench(adler32_c, p, n, count);
             } else {
                 tc = bench(adler32_c, p, n, count);
-                tm = bench(adler32_mmi, p, n, count);
+                tp = bench(adler32_mmi_prefix, p, n, count);
+                tf = bench(adler32_mmi_formula, p, n, count);
             }
-            if (tc <= 0 || tm <= 0) {
+            if (tc <= 0 || tp <= 0 || tf <= 0) {
                 printf("%5lu %2u %8u clock_unavailable_or_too_coarse\n",
                        (unsigned long)n, offset, count);
                 continue;
             }
-            printf("%5lu %2u %8u %ld %ld %.3f\n",
+            printf("%5lu %2u %8u %ld %ld %ld %.3f %.3f\n",
                    (unsigned long)n, offset, count,
-                   (long)tc, (long)tm, (double)tc / (double)tm);
+                   (long)tc, (long)tp, (long)tf,
+                   (double)tc / (double)tp, (double)tc / (double)tf);
         }
     }
     printf("benchmark sink=%lu\n", (unsigned long)sink);
