@@ -25,12 +25,23 @@ static int check(unsigned ao, unsigned bo, unsigned mismatch) {
     }
     if (mismatch < 256)
         right[mismatch] ^= 0xffu;
+    /* Check both schedules against the same input, not only the
+     * compile-time-selected public dispatch. */
     uint32_t got = compare256_mmi(left, right);
-    if (got != mismatch) {
-        printf("MMI compare256: FAIL ao=%u bo=%u mismatch=%u got=%u\n",
-               ao, bo, mismatch, got);
+    uint32_t plain = compare256_mmi_plain(left, right);
+    if (got != mismatch || plain != mismatch) {
+        printf("MMI compare256: FAIL ao=%u bo=%u mismatch=%u selected=%u plain=%u\n",
+               ao, bo, mismatch, got, plain);
         return 1;
     }
+#ifdef MIPS_MMI_COMPARE64
+    uint32_t prefilter = compare256_mmi_prefilter64(left, right);
+    if (prefilter != mismatch) {
+        printf("MMI compare256 prefilter64: FAIL ao=%u bo=%u mismatch=%u got=%u\n",
+               ao, bo, mismatch, prefilter);
+        return 1;
+    }
+#endif
     return 0;
 }
 
