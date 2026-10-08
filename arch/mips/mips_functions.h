@@ -17,6 +17,7 @@ void slide_hash_msa(deflate_state *s);
 #ifdef MIPS_MMI
 void slide_hash_mmi(deflate_state *s);
 void slide_hash_head_mmi(deflate_state *s);
+uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from, size_t len, size_t left);
 uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1);
 uint32_t longest_match_mmi(deflate_state *const s, uint32_t cur_match);
 uint32_t longest_match_slow_knuth_mmi(deflate_state *const s, uint32_t cur_match);
@@ -37,6 +38,8 @@ uint32_t longest_match_slow_roll_mmi(deflate_state *const s, uint32_t cur_match)
 #ifdef DISABLE_RUNTIME_CPU_DETECTION
 // PS2 EE - MMI
 #  ifdef MIPS_MMI_NATIVE
+#    undef native_chunkmemset_safe
+#    define native_chunkmemset_safe chunkmemset_safe_mmi
 #    undef native_compare256
 #    define native_compare256 compare256_mmi
 #    undef native_longest_match
