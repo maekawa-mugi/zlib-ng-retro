@@ -16,9 +16,14 @@
 Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
     uint8_t differences[16] ALIGNED_(16);
     uint32_t len = 0;
+    /* Different 16-byte alignment residues can never both reach an
+     * aligned address at the same comparison offset. Use safe 64-bit
+     * SWAR comparisons instead of falling back to 256 byte checks. */
+    const int same_alignment = (((uintptr_t)src0 ^ (uintptr_t)src1) & 15u) == 0;
 
     while (len < 256) {
-        if ((((uintptr_t)(src0 + len) | (uintptr_t)(src1 + len)) & 15u) == 0) {
+        if (same_alignment &&
+            (((uintptr_t)(src0 + len) & 15u) == 0)) {
             /* Keep all three addresses aligned: EE's LQ/SQ mask low bits. */
             __asm__ volatile (
                 "lq   $8, 0(%[a])\n\t"
@@ -31,14 +36,26 @@ Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
                 : "$8", "$9", "memory"
             );
 
-            /* A mismatch must be reported at the first BYTE, not the
-             * first halfword/word. Reading the output as bytes is also
-             * independent of integer byte order. */
-            for (unsigned i = 0; i < 16; i++)
-                if (differences[i] != 0)
-                    return len + i;
+            /* Fast all-equal check, with byte-wise search only on
+             * mismatch. This is independent of integer byte order. */
+            uint64_t lo = zng_memread_8(differences);
+            uint64_t hi = zng_memread_8(differences + 8);
+            if ((lo | hi) != 0) {
+                for (unsigned i = 0; i < 16; i++)
+                    if (differences[i] != 0)
+                        return len + i;
+            }
             len += 16;
+        } else if (!same_alignment && len <= 248) {
+            /* Different residues cannot be vectorized with LQ.
+             * Safe unaligned 8-byte reads preserve comparison speed. */
+            uint64_t diff = zng_memread_8(src0 + len) ^
+                            zng_memread_8(src1 + len);
+            if (diff != 0)
+                return len + zng_first_diff_byte64(diff);
+            len += 8;
         } else {
+            /* Scalar peel to the next common 16-byte boundary. */
             if (src0[len] != src1[len])
                 return len;
             len++;
