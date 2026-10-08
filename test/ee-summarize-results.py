@@ -68,6 +68,14 @@ def main():
                 print("Missing benchmark log for " + variant, file=sys.stderr)
                 continue
             measurements, failures, summary = read_run(log)
+            # When tests and benches were run separately, always inspect
+            # correctness failures from the test log as well.
+            test_log = bundle / "results" / (elf + "_tests.log")
+            if test_log.is_file() and test_log != log:
+                _, test_failures, test_summary = read_run(test_log)
+                failures.extend(test_failures)
+                if test_summary is None:
+                    failures.append("test/incomplete_log")
             variants.append((variant, feature, measurements, failures, summary, log))
     control = next((v[2] for v in variants if v[0] == "baseline"), None)
     if not control:
