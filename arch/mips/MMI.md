@@ -1,8 +1,9 @@
 # PlayStation 2 Emotion Engine MMI (experimental)
 
-This branch adds opt-in R5900 MMI acceleration to **deflate's hash-table
-sliding**, using the 128-bit `LQ`, `PSUBUH`, and `SQ` instructions. It is
-not MIPS MSA, and must never be enabled for generic MIPS CPUs.
+This branch adds opt-in R5900 MMI acceleration to **deflate hash-table
+sliding, match comparison, and selected inflate history copies**, using
+128-bit `LQ`, `SQ`, `PSUBUH`, and `PXOR` instructions. This is not MIPS
+MSA, and must never be enabled for generic MIPS CPUs.
 
 ## Scope
 
@@ -19,7 +20,13 @@ not MIPS MSA, and must never be enabled for generic MIPS CPUs.
   source/destination addresses and distance >= 16; generic C fallback for
   short-distance, differently aligned, or backward-overlapping copies.
 - Adler-32 and CRC-32 still use generic implementations. The generic
-  `inflate_fast` loop is unchanged.
+  `inflate_fast` loop is unchanged; only calls through
+  `chunkmemset_safe` are redirected to the new conditional copy path.
+- `compare256_mmi` uses the MMI fast path only if both input addresses
+  are 16-byte aligned. Inputs with different alignment residues use
+  64-bit endian-independent SWAR comparison, not unsafe unaligned `LQ`.
+- MMI copy loads/stores are strictly interleaved to preserve the behavior
+  of 16-byte-distance overlapping LZ77 history copies.
 
 **Status:** source and build integration added; no PS2 hardware test or
 R5900 cross-build has been run by the author of these commits.
@@ -48,18 +55,29 @@ If the probe fails, ensure your compiler is targeting the R5900, and for
 cross compilation consider `-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`
 when the compiler test cannot link without an SDK startup/runtime.
 
-The generated `test_mmi_slide_hash` is an **EE executable**, not a host
-executable. Run it on actual PS2 hardware using your usual ELF loader. When
-the test succeeds, it prints:
+All three generated test programs are **EE executables**, not host
+executables. Run them on actual PS2 hardware using your usual ELF loader.
+Successful output is:
 
 ```text
 MMI slide_hash: PASS
+MMI compare256: PASS
+MMI chunkmemset_safe: PASS
 ```
 
-The C test compares the MMI code to an independent scalar reference with
-different window sizes, aligned and deliberately unaligned hash arrays, and
-checks sentinel entries outside the arrays. It also verifies that the
-head-only variant leaves the `prev` table untouched.
+- `test_mmi_slide_hash` compares aligned and unaligned hash arrays with a
+  scalar reference, verifies out-of-range sentinels, and checks the head-only
+  update path separately.
+- `test_mmi_compare256` checks differing source/destination alignments,
+  all 256 mismatch indices, equal inputs, and final-byte boundaries.
+- `test_mmi_chunkset` checks overlapping forward copies, short distances,
+  backwards/forward sources, all sixteen alignment offsets, truncated
+  output space, and sentinel bytes outside the copied span.
+
+For performance testing, compare a normal `WITH_MMI=ON` build to an EE
+baseline using `WITH_MMI=OFF` with otherwise identical build flags.
+Aligned fast paths may be slower for some small inputs, so measure complete
+inflate/deflate streams before drawing conclusions.
 
 For ordinary builds that should not use MMI, omit `-DWITH_MMI=ON`.
 For an EE baseline without MMI, build the same target with
@@ -83,15 +101,15 @@ remain the responsibility of the PS2 toolchain integration.
 
 ## Suggested validation
 
-1. First run `test_mmi_slide_hash` on hardware. Capture any assembler error,
-   crash, or mismatch including `wsize` and `offset`.
+1. First run the three `test_mmi_*` executables on hardware. Capture any
+   assembler error, crash, or mismatch with its reported test parameters.
 2. Run full compress/decompress round trips with levels 1, 6, and 9, with
    incompressible, repetitive, and near-32KB-window inputs. Compare decoded
    bytes against the unmodified zlib reference implementation.
 3. Compare compressed output sizes and throughput against a no-MMI EE build.
    Measure whole-stream times, not just the vector loop.
-4. Verify `slide_hash_head_mmi` and `slide_hash_mmi` independently in the
-   diff test, ideally with `-O2` and `-O3` compiler settings.
+4. Validate with both `-O2` and `-O3`. Confirm compressed streams decode
+   correctly with an independent zlib implementation as well.
 
 Please report toolchain version, compiler flags, MMI test output, and any
 observed difference from the generic EE baseline.
@@ -100,7 +118,11 @@ observed difference from the generic EE baseline.
 
 - This is a fixed R5900 target. It does **not** probe generic MIPS at runtime.
 - The 128-bit MMI instructions operate on EE GPRs, not MIPS MSA registers.
-- The fast path relies on the compiler honouring the GNU inline assembly
-  register clobbers for `$8` and `$9` and on the target toolchain's ABI.
-- The test is intended for execution on PS2, not QEMU's generic MIPS CPU.
+- The fast paths rely on the compiler honouring GNU inline-assembly register
+  clobbers for `$8` and `$9` and on the target toolchain's ABI.
+- The tests are intended for execution on PS2, not QEMU's generic MIPS CPU.
+- The experimental compare/copy fast paths have not yet been compiled with
+  an R5900 toolchain or executed on an EE by the implementer. The available
+  host Clang does not recognize `-march=r5900`; there is no EE cross-compiler
+  installed in this environment.
 - `BUILD_SHARED_LIBS=OFF` is recommended for PS2.
