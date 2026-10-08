@@ -243,3 +243,48 @@ still requires `test_mmi_chorba` on a PS2. Run `bench_mmi_chorba` for
 an initial braid-vs-MMI throughput comparison; results are subject to the
 toolchain's `clock()` resolution. In particular, the MMI algorithm's
 scratch-ring traffic may outweigh its XOR throughput benefit.
+
+
+## Same-build A/B experiments: compare256 and slide_hash
+
+Both implementations are kept in one MMI build so that hardware tests can
+run identical inputs through each variant. Neither experimental alternative
+is enabled by default in production dispatch.
+
+- `test_mmi_slide_hash` now checks production, serial and interleaved
+  schedules (full and head-only) against the scalar reference, including
+  misaligned table addresses and sentinel values.
+- `bench_mmi_slide_hash` runs serial and interleaved code on the same EE
+  executable. It prints `serial_ticks / interleaved_ticks`; values above
+  1 suggest the interleaved schedule is faster.
+- `test_mmi_compare256` checks the plain 16-byte routine and, when built
+  with `WITH_MMI_COMPARE64=ON`, the 64-byte POR prefilter at each tested
+  mismatch position and address alignment.
+- `bench_mmi_compare256`, available with `WITH_MMI_COMPARE64=ON`,
+  now prints generic C, plain16 and prefilter64 timings side by side.
+
+```sh
+cmake -S . -B build-ee-ab \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+
+cmake --build build-ee-ab --target \
+  test_mmi_slide_hash test_mmi_compare256 \
+  bench_mmi_slide_hash bench_mmi_compare256 test_mmi_roundtrip
+
+# Execute the resulting EE binaries on a real PS2 Linux system.
+```
+
+To select the interleaved slide_hash schedule for the normal library, set
+`-DWITH_MMI_SLIDE_HASH_INTERLEAVED=ON`. With that option OFF, the original
+serial schedule remains the production implementation. Both routines are
+still available to the tests and benchmark regardless of that setting.
+`WITH_MMI_COMPARE64=ON` continues to choose the 64-byte prefilter for
+production comparison, while its test executable checks both variants.
+
+Use multiple benchmark runs, rotate ordering and compare whole-stream
+throughput with the same toolchain/flags. `clock()` may be coarse or
+unavailable on EE, so these ticks are exploratory, not hardware proof of
+a speedup. The interleaved code and the dual-variant tests have not been
+cross-compiled or executed on a PS2 by this change.
