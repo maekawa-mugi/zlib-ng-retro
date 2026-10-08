@@ -107,6 +107,77 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi_burst(uint8_t *out, uint8_t *from,
     return chunkmemset_safe_mmi_impl(out, from, len, left, 1);
 }
 
+/* Very short LZ77 history distances 1/2/4/8 are periodic with a
+ * 16-byte quadword. Build one exact period after scalar alignment peel,
+ * then emit independent SQ stores. The baseline generic copy handles
+ * small lengths, other distances and forward-source semantics.
+ *
+ * This is an experimental throughput candidate, not a replacement for
+ * the safety conditions in chunkmemset_safe_mmi_impl().
+ */
+Z_INTERNAL uint8_t *chunkmemset_safe_mmi_pattern(uint8_t *out, uint8_t *from,
+                                                 size_t len, size_t left) {
+    size_t n = MIN(len, left);
+    uintptr_t from_addr = (uintptr_t)from;
+    uintptr_t out_addr = (uintptr_t)out;
+    size_t distance = out_addr > from_addr ? (size_t)(out_addr - from_addr) : 0;
+    if (n >= 64 && (distance == 1 || distance == 2 ||
+                    distance == 4 || distance == 8)) {
+        uint8_t *dst = out;
+        const uint8_t *src = from;
+
+        /* This peel must respect forward sequential LZ77 overlap. */
+        while (n != 0 && ((uintptr_t)dst & 15u) != 0) {
+            *dst++ = *src++;
+            --n;
+        }
+        if (n >= 16) {
+            uint8_t period[16] ALIGNED_(16);
+            const uint8_t *last = dst - distance;
+            for (unsigned i = 0; i < 16; ++i)
+                period[i] = last[i % distance];
+
+            while (n >= 64) {
+                __asm__ volatile (
+                    "lq $8, 0(%[period])\n\t"
+                    "sq $8, 0(%[dst])\n\t"
+                    "sq $8, 16(%[dst])\n\t"
+                    "sq $8, 32(%[dst])\n\t"
+                    "sq $8, 48(%[dst])"
+                    :
+                    : [period] "r" (period), [dst] "r" (dst)
+                    : "$8", "memory"
+                );
+                dst += 64;
+                n -= 64;
+            }
+            while (n >= 16) {
+                __asm__ volatile (
+                    "lq $8, 0(%[period])\n\t"
+                    "sq $8, 0(%[dst])"
+                    :
+                    : [period] "r" (period), [dst] "r" (dst)
+                    : "$8", "memory"
+                );
+                dst += 16;
+                n -= 16;
+            }
+        }
+        while (n-- != 0) {
+            *dst = *(dst - distance);
+            dst++;
+        }
+        return dst;
+    }
+#ifdef MIPS_MMI_CHUNKSET_PATTERN
+    return chunkmemset_safe_mmi_pattern(out, from, len, left);
+#elif defined(MIPS_MMI_CHUNKSET_BURST)
+    return chunkmemset_safe_mmi_burst(out, from, len, left);
+#else
+    return chunkmemset_safe_mmi_serial(out, from, len, left);
+#endif
+}
+
 Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
                                          size_t len, size_t left) {
 #ifdef MIPS_MMI_CHUNKSET_BURST
