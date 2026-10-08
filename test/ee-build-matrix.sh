@@ -38,6 +38,7 @@ build_one() {
         -DWITH_MMI_ADLER32_FUSED_COPY=OFF \
         -DWITH_MMI_CHORBA_PAIRED_TAPS=OFF \
         -DWITH_MMI_CHORBA_FUSED_COPY=OFF \
+        -DWITH_MMI_CHORBA_THRESHOLD=4096 \
         -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON \
         -DWITH_GTEST=OFF -DZLIB_COMPAT=ON \
         "$@"
@@ -62,6 +63,8 @@ build_one adler_formula WITH_MMI_ADLER32_FORMULA -DWITH_MMI_ADLER32_FORMULA=ON
 build_one adler_fused_copy WITH_MMI_ADLER32_FUSED_COPY -DWITH_MMI_ADLER32_FUSED_COPY=ON
 build_one chorba_paired WITH_MMI_CHORBA_PAIRED_TAPS -DWITH_MMI_CHORBA_PAIRED_TAPS=ON
 build_one chorba_fused_copy WITH_MMI_CHORBA_FUSED_COPY -DWITH_MMI_CHORBA_FUSED_COPY=ON
+build_one chorba_threshold_1024 WITH_MMI_CHORBA_THRESHOLD -DWITH_MMI_CHORBA_THRESHOLD=1024
+build_one chorba_threshold_8192 WITH_MMI_CHORBA_THRESHOLD -DWITH_MMI_CHORBA_THRESHOLD=8192
 
 # The combined run measures the whole-stream effect of adopting all
 # candidates simultaneously; it is NOT a replacement for one-variable A/B.
