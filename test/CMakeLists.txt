@@ -41,6 +41,16 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     add_test(NAME mmi_compare256
         COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_compare256>)
 
+    if(WITH_MMI_COMPARE64)
+        add_executable(bench_mmi_compare256 bench_mmi_compare256.c)
+        configure_test_executable(bench_mmi_compare256)
+        if(NOT DEFINED BUILD_SHARED_LIBS)
+            target_link_libraries(bench_mmi_compare256 zlib-ng-static)
+        else()
+            target_link_libraries(bench_mmi_compare256 zlib-ng)
+        endif()
+    endif()
+
     add_executable(test_mmi_chunkset test_mmi_chunkset.c)
     configure_test_executable(test_mmi_chunkset)
     if(NOT DEFINED BUILD_SHARED_LIBS)

@@ -2,8 +2,9 @@
  * For conditions of distribution and use, see copyright notice in zlib.h
  *
  * LQ rounds unaligned addresses down, so vector loads are ONLY used when
- * BOTH input pointers are 16-byte aligned.  All other bytes use the scalar
- * path, including the case where their alignment residues differ.
+ * BOTH input pointers are 16-byte aligned. Other alignments use scalar
+ * peeling or safe unaligned 8-byte reads. Optional 64-byte prefilter
+ * uses PXOR/POR to skip four matching vectors with one result store.
  */
 #ifdef MIPS_MMI
 

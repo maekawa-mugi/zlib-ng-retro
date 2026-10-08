@@ -163,3 +163,13 @@ candidate is faster. `clock()` on EE toolchains may have coarse or
 unsupported timing: if it reports zero or unavailable ticks, use an
 EE-specific hardware cycle counter instead. This executable is not
 registered with CTest.
+
+## Optional 64-byte comparison benchmark
+
+Configure with `WITH_MMI=ON -DWITH_MMI_COMPARE64=ON` and build
+`test_mmi_compare256` and `bench_mmi_compare256`.
+Run the executable on EE hardware. The normal 256-byte regression test
+checks every mismatch offset and all input alignment residues; the benchmark
+also compares the optional 64-byte prefilter against generic C at different
+match lengths and offsets. Its ratio is generic ticks divided by MMI ticks.
+Both `WITH_MMI_COMPARE64` and `WITH_MMI_ADLER32` remain OFF by default.
