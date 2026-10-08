@@ -431,3 +431,27 @@ cmake --build build-ee-more --target \
 These new dispatch toggles must be benchmarked on real PS2 Linux before
 production use. Passing host-only arithmetic models does not constitute
 MMI instruction correctness or timing validation.
+
+
+## Single-ELF PS2 Linux verification and one-transfer A/B matrix
+
+See **[the one-transfer verification kit](../../test/EE_ONE_TRIP.md)**.
+`test/mmi_suite.c` integrates the standalone native correctness tests,
+randomized stress, and available A/B benchmarks into one EE executable.
+Use `mmi_suite --all`, `--tests`, `--benches`, `--smoke`, `--list`,
+or `--only NAME`. Each entry generates `MMI_SUITE_RESULT` lines that
+identify its status independently.
+
+New opt-in `WITH_MMI_CHUNKSET_PATTERN=ON` adds an additional safe
+short-distance LZ77 reconstruction candidate for distances 1, 2, 4, or
+8, using a 16-byte periodic MMI LQ/SQ fill after scalar alignment.
+The existing generic, serial and distance-safe burst options remain.
+`test_mmi_chunkset` and `bench_mmi_chunkset` compare all four methods.
+
+On the build PC, `sh test/ee-build-matrix.sh /absolute/path/to/toolchain.cmake`
+produces ten distinct EE ELF variants in one transfer directory. On PS2
+Linux, `sh run-all.sh --tests` and `sh run-all.sh --benches` write
+separate per-variant logs. After copying logs back, run
+`python3 test/ee-summarize-results.py /path/to/bundle` for whole-stream
+performance ratios. Neither the scripts nor mathematical host CI can
+replace an R5900 cross-build and real PS2 execution.
