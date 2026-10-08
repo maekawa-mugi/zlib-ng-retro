@@ -12,7 +12,8 @@
 #include "adler32_p.h"
 #include "adler32_mmi_math.h"
 
-Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) {
+static uint32_t adler32_mmi_impl(uint32_t adler, const uint8_t *buf,
+                                 size_t len, int formula) {
     uint32_t a = adler & 0xffffu, b = adler >> 16;
     if (len < 16)
         return adler32_c(adler, buf, len);
@@ -44,7 +45,10 @@ Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) 
 
             /* The first eight bytes and eight pair sums suffice for
              * the exact positional sum. No 16-element multiply loop. */
-            adler32_mmi_reduce16(&a, &b, pairs, buf);
+            if (formula)
+                adler32_mmi_reduce16_formula(&a, &b, pairs, buf);
+            else
+                adler32_mmi_reduce16_prefix(&a, &b, pairs, buf);
             buf += 16;
             n -= 16;
         }
@@ -57,6 +61,24 @@ Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) 
         b %= BASE;
     }
     return (b << 16) | a;
+}
+
+Z_INTERNAL uint32_t adler32_mmi_prefix(uint32_t adler, const uint8_t *buf,
+                                        size_t len) {
+    return adler32_mmi_impl(adler, buf, len, 0);
+}
+
+Z_INTERNAL uint32_t adler32_mmi_formula(uint32_t adler, const uint8_t *buf,
+                                         size_t len) {
+    return adler32_mmi_impl(adler, buf, len, 1);
+}
+
+Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) {
+#ifdef MIPS_MMI_ADLER32_FORMULA
+    return adler32_mmi_formula(adler, buf, len);
+#else
+    return adler32_mmi_prefix(adler, buf, len);
+#endif
 }
 
 /* Baseline two-pass copy. Preserved for reproducible A/B measurements. */
@@ -121,7 +143,11 @@ Z_INTERNAL uint32_t adler32_copy_mmi_fused(uint32_t adler, uint8_t *dst,
                 );
             }
 
-            adler32_mmi_reduce16(&a, &b, pairs, src);
+#ifdef MIPS_MMI_ADLER32_FORMULA
+            adler32_mmi_reduce16_formula(&a, &b, pairs, src);
+#else
+            adler32_mmi_reduce16_prefix(&a, &b, pairs, src);
+#endif
             if (((uintptr_t)dst & 15u) != 0 && dst != src)
                 memcpy(dst, src, 16);
             src += 16;
