@@ -338,3 +338,37 @@ compare identical data and multiple runs; `clock()` on PS2 Linux may be
 coarse and is not a substitute for EE performance counters. The changes
 are experimental and have not been cross-built or measured on hardware
 by their implementer.
+
+
+## Adler-32 weighted-sum A/B and full-stream benchmark
+
+The scalar weighting of MMI halfword pairs now has two mathematically
+equivalent forms:
+
+- `adler32_mmi_prefix` computes a running 8-lane prefix sum (the baseline).
+- `adler32_mmi_formula` uses explicit coefficients `8,7,6,5,4,3,2,1`
+  and an unrolled sum of the first eight input bytes.
+
+`WITH_MMI_ADLER32_FORMULA=ON` selects the latter in normal checksum
+dispatch; OFF remains the original behavior. `test_mmi_adler32` and the
+host-runnable `test_mmi_adler32_math` check both against an independent
+bytewise implementation. `bench_mmi_adler32` prints generic C, prefix,
+and formula timings on the same hardware.
+
+`bench_mmi_roundtrip` checks and measures whole-stream compress/decompress
+at levels 1, 6, 9, using incompressible, repetitive, zero and mixed
+inputs (4 KiB, 64 KiB, 256 KiB). The timings include library invocation
+and full deflate/inflate work, not just a microkernel. The printed compressed
+sizes allow cross-build ratio comparisons. For useful performance decisions,
+run identical builds differing in only one `WITH_MMI_*` flag:
+
+```sh
+cmake --build build-ee-extended --target \
+  test_mmi_adler32 bench_mmi_adler32 test_mmi_roundtrip bench_mmi_roundtrip
+# Run the four resulting binaries on PS2 Linux.
+```
+
+**Important:** these source changes were not compiled with an R5900
+toolchain or executed on PS2 hardware by the contributor of this PR.
+Do not enable experimental production flags merely because generic
+host-side arithmetic tests pass.
