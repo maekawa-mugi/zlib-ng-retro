@@ -39,8 +39,10 @@ void slide_hash_mmi_interleaved(deflate_state *s);
 void slide_hash_head_mmi_serial(deflate_state *s);
 void slide_hash_head_mmi_interleaved(deflate_state *s);
 uint32_t compare256_mmi_plain(const uint8_t *src0, const uint8_t *src1);
+uint32_t compare256_mmi_swar(const uint8_t *src0, const uint8_t *src1);
 #ifdef MIPS_MMI_COMPARE64
 uint32_t compare256_mmi_prefilter64(const uint8_t *src0, const uint8_t *src1);
+uint32_t compare256_mmi_prefilter64_swar(const uint8_t *src0, const uint8_t *src1);
 #endif
 uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from, size_t len, size_t left);
 uint8_t *chunkmemset_safe_mmi_serial(uint8_t *out, uint8_t *from, size_t len, size_t left);
