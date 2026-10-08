@@ -26,6 +26,7 @@ DECL(test, slide_hash);
 DECL(test, compare256);
 DECL(test, chunkset);
 DECL(test, roundtrip);
+DECL(test, stress);
 DECL(test, adler32_math);
 DECL(bench, slide_hash);
 DECL(bench, chunkset);
@@ -49,6 +50,7 @@ static const suite_entry entries[] = {
     ENTRY(test, compare256, 1),
     ENTRY(test, chunkset, 1),
     ENTRY(test, roundtrip, 1),
+    ENTRY(test, stress, 0),
     ENTRY(test, adler32_math, 1),
 #ifdef MIPS_MMI_ADLER32
     ENTRY(test, adler32, 0),
