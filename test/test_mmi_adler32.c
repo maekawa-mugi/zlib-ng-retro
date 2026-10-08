@@ -21,12 +21,26 @@ static int run_case(size_t n, unsigned off, uint32_t initial) {
                (unsigned long)actual, (unsigned long)expected);
         return 1;
     }
-    memset(dst, 0xa5, sizeof(dst));
-    actual = adler32_copy_mmi(initial, dst, data, n);
-    if (actual != expected || memcmp(dst, data, n) != 0 ||
-        (n < sizeof(dst) && dst[n] != 0xa5u)) {
-        printf("MMI Adler copy FAIL len=%lu offset=%u\n", (unsigned long)n, off);
-        return 1;
+    /* Destination misalignment can differ from the source residue.
+     * Check both copy schedules, production dispatch and output sentinels. */
+    for (unsigned destoff = 0; destoff < 16; destoff += 5) {
+        for (unsigned variant = 0; variant < 3; ++variant) {
+            memset(dst, 0xa5, sizeof(dst));
+            uint8_t *output = dst + destoff;
+            if (variant == 0)
+                actual = adler32_copy_mmi(initial, output, data, n);
+            else if (variant == 1)
+                actual = adler32_copy_mmi_twopass(initial, output, data, n);
+            else
+                actual = adler32_copy_mmi_fused(initial, output, data, n);
+            if (actual != expected || memcmp(output, data, n) != 0 ||
+                (n + destoff < sizeof(dst) && output[n] != 0xa5u) ||
+                (destoff != 0 && dst[destoff - 1] != 0xa5u)) {
+                printf("MMI Adler copy FAIL len=%lu srcoff=%u dstoff=%u variant=%u\n",
+                       (unsigned long)n, off, destoff, variant);
+                return 1;
+            }
+        }
     }
     size_t first = n / 3;
     actual = adler32_mmi(initial, data, first);
