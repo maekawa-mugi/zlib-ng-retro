@@ -25,9 +25,10 @@ The build stops immediately if any configuration cannot compile or link.
 Do **not** transfer an incomplete bundle to the PS2. Inspect the first
 compiler/assembler/linker error on the PC and fix it before the trip.
 
-The resulting directory has `manifest.csv`, ten `mmi_suite_*` EE ELF
-executables, and `run-all.sh`. The ten builds consist of one control,
-eight isolated feature changes, and one combined configuration:
+The resulting directory has `manifest.csv`, twelve `mmi_suite_*` EE ELF
+executables, and `run-all.sh`. The twelve builds consist of one control,
+eight isolated feature changes, two CRC32 crossover thresholds, and
+one combined configuration:
 
 | Configuration | Single runtime dispatch change relative to control |
 | --- | --- |
@@ -40,9 +41,11 @@ eight isolated feature changes, and one combined configuration:
 | `adler_fused_copy` | Fused Adler checksum and copy |
 | `chorba_paired` | Paired XOR scatter taps |
 | `chorba_fused_copy` | Fused CRC and copy |
+| `chorba_threshold_1024` | Chorba starts at 1024B instead of 4096B |
+| `chorba_threshold_8192` | Chorba starts at 8192B instead of 4096B |
 | `combined` | All eight candidates enabled together |
 
-All ten builds have the parent MMI, 64-byte compare prefilter, experimental
+All twelve builds have the parent MMI, 64-byte compare prefilter, experimental
 Adler-32, and experimental Chorba CRC-32 enabled. Hence `baseline` is a
 **control among MMI builds**, not generic zlib without MMI. Each suite also
 benchmarks generic C and several original kernels directly.
