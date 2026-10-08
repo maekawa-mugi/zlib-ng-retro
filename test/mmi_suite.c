@@ -132,6 +132,10 @@ static void features(void) {
 #else
     puts("MMI_SUITE_FEATURE,chorba,OFF");
 #endif
+#ifdef MIPS_MMI_CHORBA
+    printf("MMI_SUITE_FEATURE,chorba_threshold,%u\n",
+           (unsigned)MIPS_MMI_CHORBA_THRESHOLD);
+#endif
 #ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
     puts("MMI_SUITE_FEATURE,chorba_paired_taps,ON");
 #else
