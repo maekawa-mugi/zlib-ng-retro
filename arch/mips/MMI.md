@@ -288,3 +288,53 @@ throughput with the same toolchain/flags. `clock()` may be coarse or
 unavailable on EE, so these ticks are exploratory, not hardware proof of
 a speedup. The interleaved code and the dual-variant tests have not been
 cross-compiled or executed on a PS2 by this change.
+
+
+## Additional A/B kernels (LZ77, CRC32 Chorba, Adler-32 copy)
+
+The following implementations are linked side by side when their parent MMI
+feature is built, even if the experimental production switch remains OFF.
+
+| Kernel | Baseline | Candidate | Dispatch switch (default OFF) |
+| --- | --- | --- | --- |
+| LZ77 `chunkmemset_safe_mmi` | Serial LQ/SQ | Four loads then four stores, only if distance >=64 | `WITH_MMI_CHUNKSET_BURST` |
+| `crc32_chorba_mmi` | One tap per MMI XOR operation | Paired tap writes keeping value in a GPR | `WITH_MMI_CHORBA_PAIRED_TAPS` |
+| `adler32_copy_mmi` | MMI checksum followed by memcpy | One-pass checksum and MMI copy for aligned output | `WITH_MMI_ADLER32_FUSED_COPY` |
+
+The burst LZ77 kernel **must not** load four blocks in advance if the
+distance is under 64 bytes, because newly written bytes would be needed
+as later input. For those distances, the candidate always uses the
+original sequential LQ/SQ order. Misaligned and forward-source cases
+still use the generic fallback.
+
+The paired Chorba scatter uses the same ten offsets and does not alter
+CRC polynomial arithmetic. Its speed depends on R5900 load latency and
+GPR pressure. It is only available if `WITH_MMI_CHORBA=ON`.
+
+The fused Adler copy has the same non-overlap contract as `memcpy`.
+The 128-bit store is performed only when the destination is 16-byte
+aligned; a safe ordinary byte copy handles other destination alignments.
+It is only available if `WITH_MMI_ADLER32=ON`.
+
+Build all additional A/B runners:
+
+```sh
+cmake -S . -B build-ee-extended \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DWITH_MMI_ADLER32=ON -DWITH_MMI_CHORBA=ON \
+  -DWITH_CRC32_CHORBA=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+
+cmake --build build-ee-extended --target \
+  test_mmi_chunkset test_mmi_chorba test_mmi_adler32 test_mmi_roundtrip \
+  bench_mmi_chunkset bench_mmi_chorba bench_mmi_adler32_copy \
+  bench_mmi_slide_hash bench_mmi_compare256
+```
+
+Run the executables on actual PS2 hardware. The correctness tests now call
+the selected dispatch **and both alternatives** directly. When benchmarking,
+compare identical data and multiple runs; `clock()` on PS2 Linux may be
+coarse and is not a substitute for EE performance counters. The changes
+are experimental and have not been cross-built or measured on hardware
+by their implementer.
