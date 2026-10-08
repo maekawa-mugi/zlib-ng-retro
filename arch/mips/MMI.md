@@ -52,9 +52,9 @@ cmake -S . -B build-ee \
 cmake --build build-ee --target zlib-ng test_mmi_slide_hash test_mmi_compare256 test_mmi_chunkset test_mmi_roundtrip
 
 # Optional experimental checksum, built separately for A/B testing:
-cmake -S . -B build-ee-adler \\
-  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \\
-  -DWITH_MMI=ON -DWITH_MMI_ADLER32=ON \\
+cmake -S . -B build-ee-adler \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_ADLER32=ON \
   -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
 cmake --build build-ee-adler --target test_mmi_adler32
 ```
@@ -66,7 +66,7 @@ If the probe fails, ensure your compiler is targeting the R5900, and for
 cross compilation consider `-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`
 when the compiler test cannot link without an SDK startup/runtime.
 
-All four generated test programs are **EE executables**, not host
+The four standard test programs (and optional Adler-32 test) are **EE executables**, not host
 executables. Run them on actual PS2 hardware using your usual ELF loader.
 Successful output is:
 
@@ -75,6 +75,8 @@ MMI slide_hash: PASS
 MMI compare256: PASS
 MMI chunkmemset_safe: PASS
 MMI roundtrip: PASS
+# With WITH_MMI_ADLER32=ON:
+MMI Adler-32: PASS
 ```
 
 - `test_mmi_slide_hash` compares aligned and unaligned hash arrays with a
@@ -88,6 +90,8 @@ MMI roundtrip: PASS
 - `test_mmi_roundtrip` compresses and decompresses four kinds of input
   patterns at levels 1/6/9, including buffers much larger than 32KB.
   It detects incorrect decoded bytes, lengths, and error statuses.
+- Optional `test_mmi_adler32` checks checksum and copy equivalence to
+  `adler32_c` over many lengths, alignments, patterns and incremental chunks.
 
 For performance testing, compare a normal `WITH_MMI=ON` build to an EE
 baseline using `WITH_MMI=OFF` with otherwise identical build flags.
