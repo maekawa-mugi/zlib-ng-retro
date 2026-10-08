@@ -36,7 +36,7 @@ static uint32_t reference(uint32_t initial, const uint8_t *src, size_t len) {
     return s2 << 16 | s1;
 }
 
-static uint32_t model(uint32_t initial, const uint8_t *src, size_t len) {
+static uint32_t model(uint32_t initial, const uint8_t *src, size_t len, int formula) {
     uint32_t s1 = initial & 65535u, s2 = initial >> 16;
     if (len == 0)
         return initial;
@@ -52,7 +52,10 @@ static uint32_t model(uint32_t initial, const uint8_t *src, size_t len) {
             uint16_t pair[8];
             for (unsigned i = 0; i < 8; i++)
                 pair[i] = (uint16_t)src[i] + (uint16_t)src[i + 8];
-            adler32_mmi_reduce16(&s1, &s2, pair, src);
+            if (formula)
+                adler32_mmi_reduce16_formula(&s1, &s2, pair, src);
+            else
+                adler32_mmi_reduce16_prefix(&s1, &s2, pair, src);
             src += 16;
             n -= 16;
         }
@@ -68,18 +71,21 @@ static uint32_t model(uint32_t initial, const uint8_t *src, size_t len) {
 }
 
 static int check(const uint8_t *src, size_t len, uint32_t initial) {
-    uint32_t actual = model(initial, src, len);
+    uint32_t actual = model(initial, src, len, 0);
+    uint32_t formula_result = model(initial, src, len, 1);
     uint32_t expected = reference(initial, src, len);
-    if (actual != expected) {
+    if (actual != expected || formula_result != expected) {
         printf("MMI Adler math FAIL len=%lu initial=%08lx actual=%08lx expected=%08lx\n",
                (unsigned long)len, (unsigned long)initial,
                (unsigned long)actual, (unsigned long)expected);
         return 1;
     }
     size_t split = len / 3;
-    actual = model(initial, src, split);
-    actual = model(actual, src + split, len - split);
-    if (actual != expected) {
+    actual = model(initial, src, split, 0);
+    actual = model(actual, src + split, len - split, 0);
+    formula_result = model(initial, src, split, 1);
+    formula_result = model(formula_result, src + split, len - split, 1);
+    if (actual != expected || formula_result != expected) {
         printf("MMI Adler math streaming FAIL len=%lu initial=%08lx\n",
                (unsigned long)len, (unsigned long)initial);
         return 1;
