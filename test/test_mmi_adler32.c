@@ -15,10 +15,13 @@ static int run_case(size_t n, unsigned off, uint32_t initial) {
     const uint8_t *data = src + off;
     uint32_t expected = adler32_c(initial, data, n);
     uint32_t actual = adler32_mmi(initial, data, n);
-    if (actual != expected) {
-        printf("MMI Adler FAIL len=%lu offset=%u initial=%08lx got=%08lx expected=%08lx\n",
+    uint32_t prefix = adler32_mmi_prefix(initial, data, n);
+    uint32_t formula = adler32_mmi_formula(initial, data, n);
+    if (actual != expected || prefix != expected || formula != expected) {
+        printf("MMI Adler FAIL len=%lu offset=%u initial=%08lx got=%08lx prefix=%08lx formula=%08lx expected=%08lx\n",
                (unsigned long)n, off, (unsigned long)initial,
-               (unsigned long)actual, (unsigned long)expected);
+               (unsigned long)actual, (unsigned long)prefix,
+               (unsigned long)formula, (unsigned long)expected);
         return 1;
     }
     /* Destination misalignment can differ from the source residue.
