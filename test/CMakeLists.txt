@@ -79,6 +79,14 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     add_test(NAME mmi_chunkset
         COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_chunkset>)
 
+    add_executable(bench_mmi_roundtrip bench_mmi_roundtrip.c)
+    configure_test_executable(bench_mmi_roundtrip)
+    if(NOT DEFINED BUILD_SHARED_LIBS)
+        target_link_libraries(bench_mmi_roundtrip zlib-ng-static)
+    else()
+        target_link_libraries(bench_mmi_roundtrip zlib-ng)
+    endif()
+
     add_executable(test_mmi_roundtrip test_mmi_roundtrip.c)
     configure_test_executable(test_mmi_roundtrip)
     if(NOT DEFINED BUILD_SHARED_LIBS)
