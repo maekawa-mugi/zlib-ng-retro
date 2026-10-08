@@ -42,34 +42,39 @@ int main(void) {
 
     printf("MMI Chorba A/B, CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("size offset count braid_ticks mmi_ticks C_over_MMI");
+    puts("size offset count braid_ticks single_ticks paired_ticks braid_over_single braid_over_paired");
 
     for (unsigned i = 0; i < sizeof(sizes)/sizeof(sizes[0]); i++) {
         for (unsigned align = 0; align <= 1; align++) {
             const uint8_t *p = data + align;
             uint32_t expect = crc32_braid(0, p, sizes[i]);
-            uint32_t got = crc32_chorba_mmi(0, p, sizes[i]);
-            if (expect != got) {
-                printf("CRC mismatch size=%lu align=%u braid=%08lx mmi=%08lx\n",
-                       (unsigned long)sizes[i], align,
-                       (unsigned long)expect, (unsigned long)got);
+            uint32_t single = crc32_chorba_mmi_single(0, p, sizes[i]);
+            uint32_t paired = crc32_chorba_mmi_paired(0, p, sizes[i]);
+            if (expect != single || expect != paired) {
+                printf("CRC mismatch size=%lu align=%u braid=%08lx single=%08lx paired=%08lx\n",
+                       (unsigned long)sizes[i], align, (unsigned long)expect,
+                       (unsigned long)single, (unsigned long)paired);
                 return 1;
             }
-            clock_t b, m;
+            clock_t braid_ticks, single_ticks, paired_ticks;
             if ((i + align) & 1u) {
-                m = run(crc32_chorba_mmi, p, sizes[i], iterations[i]);
-                b = run(crc32_braid, p, sizes[i], iterations[i]);
+                paired_ticks = run(crc32_chorba_mmi_paired, p, sizes[i], iterations[i]);
+                single_ticks = run(crc32_chorba_mmi_single, p, sizes[i], iterations[i]);
+                braid_ticks = run(crc32_braid, p, sizes[i], iterations[i]);
             } else {
-                b = run(crc32_braid, p, sizes[i], iterations[i]);
-                m = run(crc32_chorba_mmi, p, sizes[i], iterations[i]);
+                braid_ticks = run(crc32_braid, p, sizes[i], iterations[i]);
+                single_ticks = run(crc32_chorba_mmi_single, p, sizes[i], iterations[i]);
+                paired_ticks = run(crc32_chorba_mmi_paired, p, sizes[i], iterations[i]);
             }
-            if (b <= 0 || m <= 0) {
+            if (braid_ticks <= 0 || single_ticks <= 0 || paired_ticks <= 0) {
                 printf("%lu %u %u clock_unavailable_or_too_coarse\n",
                        (unsigned long)sizes[i], align, iterations[i]);
             } else {
-                printf("%lu %u %u %ld %ld %.3f\n",
+                printf("%lu %u %u %ld %ld %ld %.3f %.3f\n",
                        (unsigned long)sizes[i], align, iterations[i],
-                       (long)b, (long)m, (double)b/(double)m);
+                       (long)braid_ticks, (long)single_ticks, (long)paired_ticks,
+                       (double)braid_ticks/(double)single_ticks,
+                       (double)braid_ticks/(double)paired_ticks);
             }
         }
     }
