@@ -50,6 +50,12 @@ distclean: clean
 	rm -f Makefile
 
 # PS2 EE native MMI routines use CPU flags supplied by the EE toolchain.
+adler32_mmi.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $(SRCDIR)/adler32_mmi.c
+
+adler32_mmi.lo:
+	$(CC) $(SFLAGS) $(INCLUDES) -c -o $@ $(SRCDIR)/adler32_mmi.c
+
 chunkset_mmi.o:
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $(SRCDIR)/chunkset_mmi.c
 

@@ -14,6 +14,11 @@ uint32_t adler32_copy_msa(uint32_t adler, uint8_t *dst, const uint8_t *src, size
 void slide_hash_msa(deflate_state *s);
 #endif
 
+#ifdef MIPS_MMI_ADLER32
+uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len);
+uint32_t adler32_copy_mmi(uint32_t adler, uint8_t *dst, const uint8_t *src, size_t len);
+#endif
+
 #ifdef MIPS_MMI
 void slide_hash_mmi(deflate_state *s);
 void slide_hash_head_mmi(deflate_state *s);
@@ -37,6 +42,12 @@ uint32_t longest_match_slow_roll_mmi(deflate_state *const s, uint32_t cur_match)
 
 #ifdef DISABLE_RUNTIME_CPU_DETECTION
 // PS2 EE - MMI
+#  ifdef MIPS_MMI_ADLER32_NATIVE
+#    undef native_adler32
+#    define native_adler32 adler32_mmi
+#    undef native_adler32_copy
+#    define native_adler32_copy adler32_copy_mmi
+#  endif
 #  ifdef MIPS_MMI_NATIVE
 #    undef native_chunkmemset_safe
 #    define native_chunkmemset_safe chunkmemset_safe_mmi

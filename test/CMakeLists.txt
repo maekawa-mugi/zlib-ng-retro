@@ -60,6 +60,18 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     endif()
     add_test(NAME mmi_roundtrip
         COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_roundtrip>)
+
+    if(WITH_MMI_ADLER32)
+        add_executable(test_mmi_adler32 test_mmi_adler32.c)
+        configure_test_executable(test_mmi_adler32)
+        if(NOT DEFINED BUILD_SHARED_LIBS)
+            target_link_libraries(test_mmi_adler32 zlib-ng-static)
+        else()
+            target_link_libraries(test_mmi_adler32 zlib-ng)
+        endif()
+        add_test(NAME mmi_adler32
+            COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_adler32>)
+    endif()
 endif()
 
 add_executable(example example.c)

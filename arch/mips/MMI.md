@@ -19,7 +19,11 @@ MSA, and must never be enabled for generic MIPS CPUs.
 - `chunkmemset_safe_mmi`: MMI 128-bit LZ77 history copying for aligned
   source/destination addresses and distance >= 16; generic C fallback for
   short-distance, differently aligned, or backward-overlapping copies.
-- Adler-32 and CRC-32 still use generic implementations. The generic
+- Experimental `adler32_mmi` and `adler32_copy_mmi` are available with
+  `WITH_MMI_ADLER32=ON` (OFF by default). They combine MMI byte-to-halfword
+  expansion and packed addition with exact scalar weighted sums, without
+  PMADDH or implicit HI/LO changes. Benchmark before enabling in production.
+- CRC-32 still uses generic implementations. The generic
   `inflate_fast` loop is unchanged; only calls through
   `chunkmemset_safe` are redirected to the new conditional copy path.
 - `compare256_mmi` uses the MMI fast path only if both input addresses
@@ -46,6 +50,13 @@ cmake -S . -B build-ee \
   -DZLIB_COMPAT=ON
 
 cmake --build build-ee --target zlib-ng test_mmi_slide_hash test_mmi_compare256 test_mmi_chunkset test_mmi_roundtrip
+
+# Optional experimental checksum, built separately for A/B testing:
+cmake -S . -B build-ee-adler \\
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \\
+  -DWITH_MMI=ON -DWITH_MMI_ADLER32=ON \\
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+cmake --build build-ee-adler --target test_mmi_adler32
 ```
 
 `WITH_MMI` is OFF by default. When enabled, CMake requires a working

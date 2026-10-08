@@ -17,4 +17,8 @@
 #  define MIPS_MMI_NATIVE
 #endif
 
+#if defined(MIPS_MMI_NATIVE) && defined(MIPS_MMI_ADLER32)
+#  define MIPS_MMI_ADLER32_NATIVE
+#endif
+
 #endif /* MIPS_NATIVES_H_ */
