@@ -70,7 +70,27 @@ static inline void chorba_mmi_xor_store(uint8_t *target, const uint8_t *block) {
     );
 }
 
-Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t len) {
+/* Pair two independent tap updates while retaining the 128-bit value
+ * in a GPR instead of reloading it for every tap. Targets must be aligned.
+ * The ten polynomial taps map to distinct slots in the 1024-byte ring. */
+static inline void chorba_mmi_xor_store_pair(uint8_t *first, uint8_t *second,
+                                             const uint8_t *block) {
+    __asm__ volatile (
+        "lq   $8, 0(%[value])\n\t"
+        "lq   $9, 0(%[first])\n\t"
+        "lq   $10, 0(%[second])\n\t"
+        "pxor $9, $9, $8\n\t"
+        "pxor $10, $10, $8\n\t"
+        "sq   $9, 0(%[first])\n\t"
+        "sq   $10, 0(%[second])"
+        :
+        : [value] "r" (block), [first] "r" (first), [second] "r" (second)
+        : "$8", "$9", "$10", "memory"
+    );
+}
+
+static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
+                                      size_t len, int paired) {
     size_t align = ((uintptr_t)buf & 15u);
     if (align != 0)
         align = 16u - align;
@@ -118,9 +138,17 @@ Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t le
         /* All future tap addresses are different from this slot.
          * Reclaim the current slot before the next modulo-ring cycle. */
         memset(slot, 0, 16);
-        for (unsigned j = 0; j < 10; j++) {
-            size_t target = (i + chorba_mmi_taps[j]) & CHORBA_MMI_RING_MASK;
-            chorba_mmi_xor_store(ring + target, value);
+        if (paired) {
+            for (unsigned j = 0; j < 10; j += 2) {
+                size_t first_offset = (i + chorba_mmi_taps[j]) & CHORBA_MMI_RING_MASK;
+                size_t second_offset = (i + chorba_mmi_taps[j + 1]) & CHORBA_MMI_RING_MASK;
+                chorba_mmi_xor_store_pair(ring + first_offset, ring + second_offset, value);
+            }
+        } else {
+            for (unsigned j = 0; j < 10; ++j) {
+                size_t target = (i + chorba_mmi_taps[j]) & CHORBA_MMI_RING_MASK;
+                chorba_mmi_xor_store(ring + target, value);
+            }
         }
     }
 
@@ -138,6 +166,24 @@ Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t le
     if (processed != len)
         result = crc32_braid(result, buf + processed, len - processed);
     return result;
+}
+
+Z_INTERNAL uint32_t crc32_chorba_mmi_single(uint32_t crc, const uint8_t *buf,
+                                             size_t len) {
+    return crc32_chorba_mmi_impl(crc, buf, len, 0);
+}
+
+Z_INTERNAL uint32_t crc32_chorba_mmi_paired(uint32_t crc, const uint8_t *buf,
+                                             size_t len) {
+    return crc32_chorba_mmi_impl(crc, buf, len, 1);
+}
+
+Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t len) {
+#ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
+    return crc32_chorba_mmi_paired(crc, buf, len);
+#else
+    return crc32_chorba_mmi_single(crc, buf, len);
+#endif
 }
 
 Z_INTERNAL uint32_t crc32_copy_chorba_mmi(uint32_t crc, uint8_t *dst,
