@@ -90,16 +90,24 @@ static inline void chorba_mmi_xor_store_pair(uint8_t *first, uint8_t *second,
 }
 
 static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
-                                      size_t len, int paired) {
+                                      size_t len, int paired, uint8_t *copydst) {
     size_t align = ((uintptr_t)buf & 15u);
     if (align != 0)
         align = 16u - align;
 
-    if (len < CHORBA_MMI_THRESHOLD + align)
-        return crc32_braid(crc, buf, len);
+    if (len < CHORBA_MMI_THRESHOLD + align) {
+        uint32_t result = crc32_braid(crc, buf, len);
+        if (copydst != NULL && len != 0)
+            memcpy(copydst, buf, len);
+        return result;
+    }
 
     if (align != 0) {
         crc = crc32_braid(crc, buf, align);
+        if (copydst != NULL) {
+            memcpy(copydst, buf, align);
+            copydst += align;
+        }
         buf += align;
         len -= align;
     }
@@ -125,15 +133,36 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
         const uint8_t *src = i == 0 ? first : buf + i;
 
         /* XOR the current stream vector with all pending reductions. */
-        __asm__ volatile (
-            "lq   $8, 0(%[src])\n\t"
-            "lq   $9, 0(%[slot])\n\t"
-            "pxor $8, $8, $9\n\t"
-            "sq   $8, 0(%[value])"
-            :
-            : [src] "r" (src), [slot] "r" (slot), [value] "r" (value)
-            : "$8", "$9", "memory"
-        );
+        if (copydst != NULL && i != 0 &&
+            (((uintptr_t)(copydst + i) & 15u) == 0)) {
+            /* Normal input blocks are unmodified; preserve original
+             * 128-bit data with SQ before XORing in the ring contribution.
+             * Block zero uses the seed-folded buffer and must instead
+             * copy the original, unfurled bytes. */
+            __asm__ volatile (
+                "lq   $8, 0(%[src])\n\t"
+                "sq   $8, 0(%[dst])\n\t"
+                "lq   $9, 0(%[slot])\n\t"
+                "pxor $8, $8, $9\n\t"
+                "sq   $8, 0(%[value])"
+                :
+                : [src] "r" (src), [slot] "r" (slot),
+                  [value] "r" (value), [dst] "r" (copydst + i)
+                : "$8", "$9", "memory"
+            );
+        } else {
+            __asm__ volatile (
+                "lq   $8, 0(%[src])\n\t"
+                "lq   $9, 0(%[slot])\n\t"
+                "pxor $8, $8, $9\n\t"
+                "sq   $8, 0(%[value])"
+                :
+                : [src] "r" (src), [slot] "r" (slot), [value] "r" (value)
+                : "$8", "$9", "memory"
+            );
+            if (copydst != NULL)
+                memcpy(copydst + i, buf + i, 16);
+        }
 
         /* All future tap addresses are different from this slot.
          * Reclaim the current slot before the next modulo-ring cycle. */
@@ -163,19 +192,22 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
     uint32_t result = ~chorba_mmi_unshift(residue_raw);
 
     /* Append the original unprocessed 0..15 byte suffix normally. */
-    if (processed != len)
+    if (processed != len) {
         result = crc32_braid(result, buf + processed, len - processed);
+        if (copydst != NULL)
+            memcpy(copydst + processed, buf + processed, len - processed);
+    }
     return result;
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi_single(uint32_t crc, const uint8_t *buf,
                                              size_t len) {
-    return crc32_chorba_mmi_impl(crc, buf, len, 0);
+    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL);
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi_paired(uint32_t crc, const uint8_t *buf,
                                              size_t len) {
-    return crc32_chorba_mmi_impl(crc, buf, len, 1);
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL);
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t len) {
@@ -186,11 +218,33 @@ Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t le
 #endif
 }
 
+Z_INTERNAL uint32_t crc32_copy_chorba_mmi_twopass(uint32_t crc, uint8_t *dst,
+                                                  const uint8_t *src, size_t len) {
+    uint32_t result = crc32_chorba_mmi(crc, src, len);
+    if (len != 0)
+        memcpy(dst, src, len);
+    return result;
+}
+
+/* Only opt in to this fused path on hardware after timing. The original
+ * byte stream, not the seed-folded first block, is copied to the output.
+ * The function has the same non-overlap (memcpy) contract as the baseline. */
+Z_INTERNAL uint32_t crc32_copy_chorba_mmi_fused(uint32_t crc, uint8_t *dst,
+                                                 const uint8_t *src, size_t len) {
+#ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
+    return crc32_chorba_mmi_impl(crc, src, len, 1, dst);
+#else
+    return crc32_chorba_mmi_impl(crc, src, len, 0, dst);
+#endif
+}
+
 Z_INTERNAL uint32_t crc32_copy_chorba_mmi(uint32_t crc, uint8_t *dst,
                                           const uint8_t *src, size_t len) {
-    uint32_t result = crc32_chorba_mmi(crc, src, len);
-    memcpy(dst, src, len);
-    return result;
+#ifdef MIPS_MMI_CHORBA_FUSED_COPY
+    return crc32_copy_chorba_mmi_fused(crc, dst, src, len);
+#else
+    return crc32_copy_chorba_mmi_twopass(crc, dst, src, len);
+#endif
 }
 
 #endif /* MIPS_MMI_CHORBA */
