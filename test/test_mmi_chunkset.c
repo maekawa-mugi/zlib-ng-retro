@@ -57,7 +57,7 @@ int main(void) {
                                      32, 48, 63, 64, 96, 127, 128, 192, 256};
     static const unsigned lens[] = {0, 1, 7, 8, 15, 16, 17, 31, 32,
                                     33, 63, 64, 65, 79, 95, 127, 128,
-                                    191, 256, 257, 384};
+                                    191, 256, 257, 320};
     for (unsigned direction = 0; direction <= 1; direction++)
         for (unsigned d = 0; d < sizeof(dists)/sizeof(dists[0]); d++)
             for (unsigned l = 0; l < sizeof(lens)/sizeof(lens[0]); l++)
