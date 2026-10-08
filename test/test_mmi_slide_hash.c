@@ -15,6 +15,10 @@
 
 void Z_INTERNAL slide_hash_mmi(deflate_state *s);
 void Z_INTERNAL slide_hash_head_mmi(deflate_state *s);
+void Z_INTERNAL slide_hash_mmi_serial(deflate_state *s);
+void Z_INTERNAL slide_hash_mmi_interleaved(deflate_state *s);
+void Z_INTERNAL slide_hash_head_mmi_serial(deflate_state *s);
+void Z_INTERNAL slide_hash_head_mmi_interleaved(deflate_state *s);
 
 static uint32_t seed = 0x9e3779b9u;
 
@@ -72,9 +76,19 @@ int main(void) {
         return 2;
     }
 
+    /* 0 = production selection, 1 = serial baseline, 2 = interleaved. */
+    static void (*const full[3])(deflate_state *) = {
+        slide_hash_mmi, slide_hash_mmi_serial, slide_hash_mmi_interleaved
+    };
+    static void (*const head_only[3])(deflate_state *) = {
+        slide_hash_head_mmi, slide_hash_head_mmi_serial,
+        slide_hash_head_mmi_interleaved
+    };
+
     for (unsigned size_index = 0; size_index < sizeof(sizes) / sizeof(sizes[0]); size_index++) {
         Pos wsize = sizes[size_index];
         for (unsigned offset = 0; offset < 8; offset++) {
+            for (unsigned variant = 0; variant < 3; variant++) {
             s->w_size = wsize;
             s->head = aligned_with_offset(hraw, offset);
             s->prev = aligned_with_offset(praw, (offset + 3u) & 7u);
@@ -96,12 +110,12 @@ int main(void) {
             reference_slide(hexp, HASH_SIZE, wsize);
             reference_slide(pexp, wsize, wsize);
 
-            slide_hash_mmi(s);
+            full[variant](s);
             if (first_mismatch(s->head, hexp, HASH_SIZE) >= 0 ||
                 first_mismatch(s->prev, pexp, wsize) >= 0 ||
                 s->head[-1] != 0xa55a || s->head[HASH_SIZE] != 0x5aa5 ||
                 s->prev[-1] != 0xa55a || s->prev[wsize] != 0x5aa5) {
-                printf("MMI slide_hash failed: wsize=%u offset=%u\n", (unsigned)wsize, offset);
+                printf("MMI slide_hash failed: wsize=%u offset=%u variant=%u\n", (unsigned)wsize, offset, variant);
                 return 1;
             }
 
@@ -112,17 +126,18 @@ int main(void) {
             reference_slide(hexp, HASH_SIZE, wsize);
             memcpy(s->prev, prev_original, (size_t)wsize * sizeof(Pos));
 
-            slide_hash_head_mmi(s);
+            head_only[variant](s);
             if (first_mismatch(s->head, hexp, HASH_SIZE) >= 0 ||
                 first_mismatch(s->prev, prev_original, wsize) >= 0 ||
                 s->head[-1] != 0xa55a || s->head[HASH_SIZE] != 0x5aa5 ||
                 s->prev[-1] != 0xa55a || s->prev[wsize] != 0x5aa5) {
-                printf("MMI head-only failed: wsize=%u offset=%u\n", (unsigned)wsize, offset);
+                printf("MMI head-only failed: wsize=%u offset=%u variant=%u\n", (unsigned)wsize, offset, variant);
                 return 1;
+            }
             }
         }
     }
-    puts("MMI slide_hash: PASS");
+    puts("MMI slide_hash: PASS (selected, serial, interleaved)");
     free(hraw);
     free(praw);
     free(hexp);
