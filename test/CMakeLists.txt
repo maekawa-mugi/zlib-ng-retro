@@ -71,6 +71,18 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     add_test(NAME mmi_roundtrip
         COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_roundtrip>)
 
+    if(WITH_MMI_CHORBA)
+        add_executable(test_mmi_chorba test_mmi_chorba.c)
+        configure_test_executable(test_mmi_chorba)
+        if(NOT DEFINED BUILD_SHARED_LIBS)
+            target_link_libraries(test_mmi_chorba zlib-ng-static)
+        else()
+            target_link_libraries(test_mmi_chorba zlib-ng)
+        endif()
+        add_test(NAME mmi_chorba
+            COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_chorba>)
+    endif()
+
     if(WITH_MMI_ADLER32)
         add_executable(test_mmi_adler32 test_mmi_adler32.c)
         configure_test_executable(test_mmi_adler32)

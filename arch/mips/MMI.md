@@ -26,7 +26,14 @@ MSA, and must never be enabled for generic MIPS CPUs.
   `WITH_MMI_ADLER32=ON` (OFF by default). They combine MMI byte-to-halfword
   expansion and packed addition with exact scalar weighted sums, without
   PMADDH or implicit HI/LO changes. Benchmark before enabling in production.
-- CRC-32 still uses generic implementations. The generic
+- Optional `WITH_MMI_CHORBA=ON` enables `crc32_chorba_mmi` and
+  `crc32_copy_chorba_mmi`. It is a **non-destructive** 128-bit Chorba
+  implementation using `LQ/PXOR/SQ` to apply the paper's degree-44
+  zero polynomial scaled by 128 over GF(2). The ring buffer is 1024
+  bytes, the final remainder is 704 bytes, and a precomputed inverse
+  CRC shift matrix restores the original CRC-32. Short buffers use
+  `crc32_braid`; this experiment is OFF by default until PS2 testing.
+- The generic
   `inflate_fast` loop is unchanged; only calls through
   `chunkmemset_safe` are redirected to the new conditional copy path.
 - `compare256_mmi` uses the MMI fast path only if both input addresses
@@ -191,3 +198,33 @@ cc -std=c11 -O2 -Wall -Wextra -Werror \
 This test checks the scalar model of MMI's halfword pairs, modulo bounds,
 input alignment and streaming split behavior. Passing it does **not**
 validate the actual EE instructions; those still require PS2 execution.
+
+## Experimental MMI Chorba CRC-32
+
+Paper: Sam Russell, *Chorba: A novel CRC32 implementation*
+(https://arxiv.org/abs/2412.16398), specifically the degree-44
+`chorba_352` zero polynomial, scaled by 128 so that each XOR
+offset falls on a 16-byte EE GPR boundary.
+
+The chronological XOR taps (in bytes) are:
+`16, 48, 112, 144, 192, 208, 448, 592, 624, 704`.
+These are the exponents **in ascending order** multiplied by 16.
+For reflected CRC-32, using `(44 - exponent) * 16` would be wrong.
+The 704-byte zero-input reverse shift uses a precomputed 32-column
+GF(2) matrix. The public CRC seed is XOR-folded into the first four
+bytes, and the input buffer is never modified.
+
+```sh
+cmake -S . -B build-ee-chorba \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_CHORBA=ON -DWITH_CRC32_CHORBA=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+cmake --build build-ee-chorba --target zlib-ng test_mmi_chorba test_mmi_roundtrip
+```
+
+Run `test_mmi_chorba` on the PS2. Expected: `MMI Chorba: PASS`.
+It compares native MMI against generic braid for different sizes,
+input alignments, CRC seeds, repeated patterns, copy variants, and
+streaming splits. Compare large-buffer throughput on actual EE
+hardware before enabling this globally. The 1024-byte ring traffic
+and 704-byte finalization can make small inputs slower than braid.

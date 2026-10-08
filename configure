@@ -118,6 +118,7 @@ buildmsa=1
 buildmmi=0
 buildmmiadler32=0
 buildmmicompare64=0
+buildmmichorba=0
 floatabi=
 # For CPUs that can benefit from AVX512, it seems GCC generates suboptimal
 # instruction scheduling unless you specify a reasonable -mtune= target
@@ -216,6 +217,7 @@ case "$1" in
        echo '    [--with-mmi]                 Build for the PlayStation 2 EE (R5900 MMI)' | tee -a configure.log
         echo '    [--with-mmi-adler32]         Experimental EE MMI Adler-32 (default off)' | tee -a configure.log
         echo '    [--with-mmi-compare64]       Experimental 64-byte MMI compare with POR' | tee -a configure.log
+        echo '    [--with-mmi-chorba]         Experimental EE MMI Chorba CRC-32 (off by default)' | tee -a configure.log
       echo '    [--with-reduced-mem]        Reduced memory usage for special cases (reduces performance)' | tee -a configure.log
         exit 0 ;;
     -p*=* | --prefix=*) prefix=$(echo $1 | sed 's/.*=//'); shift ;;
@@ -260,6 +262,7 @@ case "$1" in
     --with-mmi) buildmmi=1; shift ;;
      --with-mmi-adler32) buildmmiadler32=1; shift ;;
      --with-mmi-compare64) buildmmicompare64=1; shift ;;
+     --with-mmi-chorba) buildmmichorba=1; shift ;;
     --with-reduced-mem) reducedmem=1; shift ;;
     -a*=* | --archs=*) ARCHS=$(echo $1 | sed 's/.*=//'); shift ;;
     --sysconfdir=*) echo "ignored option: --sysconfdir" | tee -a configure.log; shift ;;
@@ -2304,6 +2307,10 @@ EOF
 
         ARCHDIR=arch/mips
 
+        if test $buildmmichorba -eq 1 && test $buildmmi -ne 1; then
+            echo "ERROR: --with-mmi-chorba requires --with-mmi" | tee -a configure.log
+            exit 1
+        fi
         if test $buildmmicompare64 -eq 1 && test $buildmmi -ne 1; then
             echo "ERROR: --with-mmi-compare64 requires --with-mmi" | tee -a configure.log
             exit 1
@@ -2328,6 +2335,13 @@ EOF
             SFLAGS="${SFLAGS} -DDISABLE_RUNTIME_CPU_DETECTION -DMIPS_FEATURES -DMIPS_MMI"
             ARCH_STATIC_OBJS="${ARCH_STATIC_OBJS} slide_hash_mmi.o compare256_mmi.o chunkset_mmi.o"
             ARCH_SHARED_OBJS="${ARCH_SHARED_OBJS} slide_hash_mmi.lo compare256_mmi.lo chunkset_mmi.lo"
+            if test $buildmmichorba -eq 1; then
+                # The existing EE assembly check includes LQ, PXOR and SQ.
+                CFLAGS="${CFLAGS} -DMIPS_MMI_CHORBA"
+                SFLAGS="${SFLAGS} -DMIPS_MMI_CHORBA"
+                ARCH_STATIC_OBJS="${ARCH_STATIC_OBJS} crc32_chorba_mmi.o"
+                ARCH_SHARED_OBJS="${ARCH_SHARED_OBJS} crc32_chorba_mmi.lo"
+            fi
             if test $buildmmicompare64 -eq 1; then
                 check_mmi_por_asm
                 if test $HAVE_MMI_POR_ASM -ne 1; then
