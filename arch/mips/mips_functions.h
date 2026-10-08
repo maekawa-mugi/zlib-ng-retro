@@ -17,6 +17,10 @@ void slide_hash_msa(deflate_state *s);
 #ifdef MIPS_MMI
 void slide_hash_mmi(deflate_state *s);
 void slide_hash_head_mmi(deflate_state *s);
+uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1);
+uint32_t longest_match_mmi(deflate_state *const s, uint32_t cur_match);
+uint32_t longest_match_slow_knuth_mmi(deflate_state *const s, uint32_t cur_match);
+uint32_t longest_match_slow_roll_mmi(deflate_state *const s, uint32_t cur_match);
 #endif
 
 #define CHUNKSET_FALLBACK
@@ -33,6 +37,14 @@ void slide_hash_head_mmi(deflate_state *s);
 #ifdef DISABLE_RUNTIME_CPU_DETECTION
 // PS2 EE - MMI
 #  ifdef MIPS_MMI_NATIVE
+#    undef native_compare256
+#    define native_compare256 compare256_mmi
+#    undef native_longest_match
+#    define native_longest_match longest_match_mmi
+#    undef native_longest_match_slow_knuth
+#    define native_longest_match_slow_knuth longest_match_slow_knuth_mmi
+#    undef native_longest_match_slow_roll
+#    define native_longest_match_slow_roll longest_match_slow_roll_mmi
 #    undef native_slide_hash
 #    define native_slide_hash slide_hash_mmi
 #    undef native_slide_hash_head

@@ -12,8 +12,10 @@ not MIPS MSA, and must never be enabled for generic MIPS CPUs.
   unsigned saturating subtraction.
 - Misaligned prefixes and tails use scalar operations. All `LQ`/`SQ`
   accesses are 16-byte-aligned, since EE silently masks low address bits.
-- Other operations, including Adler-32, CRC-32, match searching, and inflate
-  copying, continue to use generic implementations.
+- `compare256_mmi`: use aligned MMI `LQ`/`PXOR` to find the first mismatched
+  byte, with safe scalar paths for incompatible input alignments.
+- MMI-backed `longest_match` variants use the same comparison routine.
+- Adler-32, CRC-32, and inflate copying still use generic implementations.
 
 **Status:** source and build integration added; no PS2 hardware test or
 R5900 cross-build has been run by the author of these commits.
@@ -32,7 +34,7 @@ cmake -S . -B build-ee \
   -DBUILD_TESTING=ON \
   -DZLIB_COMPAT=ON
 
-cmake --build build-ee --target zlib-ng test_mmi_slide_hash
+cmake --build build-ee --target zlib-ng test_mmi_slide_hash test_mmi_compare256
 ```
 
 `WITH_MMI` is OFF by default. When enabled, CMake requires a working

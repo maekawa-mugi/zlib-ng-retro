@@ -833,8 +833,8 @@ if(WITH_OPTIM)
 
             add_definitions(-DMIPS_FEATURES -DMIPS_MMI)
             list(APPEND ZLIB_ARCH_HDRS ${ARCHDIR}/mips_functions.h)
-            list(APPEND ZLIB_ARCH_SRCS ${ARCHDIR}/slide_hash_mmi.c)
-            add_feature_info(MMI 1 "PlayStation 2 EE MMI optimized slide_hash")
+            list(APPEND ZLIB_ARCH_SRCS ${ARCHDIR}/slide_hash_mmi.c ${ARCHDIR}/compare256_mmi.c)
+            add_feature_info(MMI 1 "PlayStation 2 EE MMI optimized slide_hash and compare256")
         elseif(WITH_MSA)
             check_msa_intrinsics()
 

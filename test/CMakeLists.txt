@@ -30,6 +30,16 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     endif()
     add_test(NAME mmi_slide_hash
         COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_slide_hash>)
+
+    add_executable(test_mmi_compare256 test_mmi_compare256.c)
+    configure_test_executable(test_mmi_compare256)
+    if(NOT DEFINED BUILD_SHARED_LIBS)
+        target_link_libraries(test_mmi_compare256 zlib-ng-static)
+    else()
+        target_link_libraries(test_mmi_compare256 zlib-ng)
+    endif()
+    add_test(NAME mmi_compare256
+        COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_compare256>)
 endif()
 
 add_executable(example example.c)
