@@ -27,10 +27,13 @@ static int run_case(const uint8_t *src, size_t len, uint32_t seed,
                     unsigned alignment) {
     uint32_t expected = crc32_braid(seed, src, len);
     uint32_t got = crc32_chorba_mmi(seed, src, len);
-    if (expected != got) {
-        printf("MMI Chorba FAIL len=%lu align=%u seed=%08lx ref=%08lx got=%08lx\n",
+    uint32_t single = crc32_chorba_mmi_single(seed, src, len);
+    uint32_t paired = crc32_chorba_mmi_paired(seed, src, len);
+    if (expected != got || expected != single || expected != paired) {
+        printf("MMI Chorba FAIL len=%lu align=%u seed=%08lx ref=%08lx got=%08lx single=%08lx paired=%08lx\n",
                (unsigned long)len, alignment, (unsigned long)seed,
-               (unsigned long)expected, (unsigned long)got);
+               (unsigned long)expected, (unsigned long)got,
+               (unsigned long)single, (unsigned long)paired);
         return 1;
     }
 
