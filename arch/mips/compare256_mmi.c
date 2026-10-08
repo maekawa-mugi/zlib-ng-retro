@@ -16,7 +16,7 @@
 
 static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
                                            const uint8_t *src1,
-                                           int prefilter64) {
+                                           int prefilter64, int firstdiff64) {
 #ifndef MIPS_MMI_COMPARE64
     (void)prefilter64;
 #endif
@@ -83,6 +83,15 @@ static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
             uint64_t lo = zng_memread_8(differences);
             uint64_t hi = zng_memread_8(differences + 8);
             if ((lo | hi) != 0) {
+                if (firstdiff64) {
+                    /* Read back the same two 64-bit words already used for
+                     * the all-equal test. Reuse the endian-independent SWAR
+                     * first-mismatch helper used by the unaligned fallback.
+                     * Avoid sixteen dependent bytewise comparisons here. */
+                    if (lo != 0)
+                        return len + zng_first_diff_byte64(lo);
+                    return len + 8 + zng_first_diff_byte64(hi);
+                }
                 for (unsigned i = 0; i < 16; i++)
                     if (differences[i] != 0)
                         return len + i;
@@ -106,24 +115,38 @@ static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
     return 256;
 }
 
-/* Keep both paths available for exhaustive correctness testing and A/B
- * timing in the same EE executable. Only the selected public routine is
- * used by the deflate dispatch. */
+/* Keep the original bytewise mismatch search and its SWAR alternative
+ * callable in the same EE executable. The optional 64-byte equality
+ * prefilter is independent of this choice, giving four A/B combinations. */
 Z_INTERNAL uint32_t compare256_mmi_plain(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 0);
+    return compare256_mmi_impl(a, b, 0, 0);
+}
+Z_INTERNAL uint32_t compare256_mmi_swar(const uint8_t *a, const uint8_t *b) {
+    return compare256_mmi_impl(a, b, 0, 1);
 }
 
 #ifdef MIPS_MMI_COMPARE64
 Z_INTERNAL uint32_t compare256_mmi_prefilter64(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 1);
+    return compare256_mmi_impl(a, b, 1, 0);
+}
+Z_INTERNAL uint32_t compare256_mmi_prefilter64_swar(const uint8_t *a, const uint8_t *b) {
+    return compare256_mmi_impl(a, b, 1, 1);
 }
 #endif
 
 Z_INTERNAL uint32_t compare256_mmi(const uint8_t *a, const uint8_t *b) {
 #ifdef MIPS_MMI_COMPARE64
+#  ifdef MIPS_MMI_COMPARE_SWAR
+    return compare256_mmi_prefilter64_swar(a, b);
+#  else
     return compare256_mmi_prefilter64(a, b);
+#  endif
 #else
+#  ifdef MIPS_MMI_COMPARE_SWAR
+    return compare256_mmi_swar(a, b);
+#  else
     return compare256_mmi_plain(a, b);
+#  endif
 #endif
 }
 
