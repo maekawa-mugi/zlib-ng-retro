@@ -455,3 +455,22 @@ separate per-variant logs. After copying logs back, run
 `python3 test/ee-summarize-results.py /path/to/bundle` for whole-stream
 performance ratios. Neither the scripts nor mathematical host CI can
 replace an R5900 cross-build and real PS2 execution.
+
+
+## Chorba CRC32 crossover size A/B
+
+The code also tests independent size thresholds `1024`, `4096`, and
+`8192` bytes for the same non-destructive Chorba algorithm. Configure
+the normal CRC32 dispatch with
+`-DWITH_MMI_CHORBA_THRESHOLD=1024|4096|8192` (default `4096`).
+This setting requires `WITH_MMI_CHORBA=ON` to affect the kernel.
+
+`test_mmi_chorba` validates all three thresholds against `crc32_braid`,
+including 1023/1024/1025, 4095/4096/4097, and 8191/8192/8193
+boundaries, seeds, alignments and streaming. `bench_mmi_chorba` times
+all three along with the single- and paired-tap schedules.
+`test/gen_mmi_chorba.py` independently tests their reference arithmetic
+on a host. The one-transfer matrix includes the additional
+`chorba_threshold_1024` and `chorba_threshold_8192` EE builds, for
+a total of **12** variant binaries. The default remains 4096 until
+real PS2 timing data shows a better crossover.
