@@ -169,9 +169,7 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi_pattern(uint8_t *out, uint8_t *from,
         }
         return dst;
     }
-#ifdef MIPS_MMI_CHUNKSET_PATTERN
-    return chunkmemset_safe_mmi_pattern(out, from, len, left);
-#elif defined(MIPS_MMI_CHUNKSET_BURST)
+#ifdef MIPS_MMI_CHUNKSET_BURST
     return chunkmemset_safe_mmi_burst(out, from, len, left);
 #else
     return chunkmemset_safe_mmi_serial(out, from, len, left);
@@ -180,7 +178,9 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi_pattern(uint8_t *out, uint8_t *from,
 
 Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
                                          size_t len, size_t left) {
-#ifdef MIPS_MMI_CHUNKSET_BURST
+#ifdef MIPS_MMI_CHUNKSET_PATTERN
+    return chunkmemset_safe_mmi_pattern(out, from, len, left);
+#elif defined(MIPS_MMI_CHUNKSET_BURST)
     return chunkmemset_safe_mmi_burst(out, from, len, left);
 #else
     return chunkmemset_safe_mmi_serial(out, from, len, left);
