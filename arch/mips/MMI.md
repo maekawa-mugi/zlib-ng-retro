@@ -56,7 +56,7 @@ cmake -S . -B build-ee-adler \
   -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
   -DWITH_MMI=ON -DWITH_MMI_ADLER32=ON \
   -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
-cmake --build build-ee-adler --target test_mmi_adler32
+cmake --build build-ee-adler --target test_mmi_adler32 bench_mmi_adler32
 ```
 
 `WITH_MMI` is OFF by default. When enabled, CMake requires a working
@@ -145,3 +145,14 @@ observed difference from the generic EE baseline.
   host Clang does not recognize `-march=r5900`; there is no EE cross-compiler
   installed in this environment.
 - `BUILD_SHARED_LIBS=OFF` is recommended for PS2.
+
+## Experimental Adler-32 throughput measurement
+
+Build with `WITH_MMI_ADLER32=ON`, then execute `bench_mmi_adler32`
+on a PS2. It compares native `adler32_mmi` with `adler32_c` at
+64B, 1KB, 8KB and 64KB sizes, both aligned and offset-by-one.
+The ratio is `C_ticks / MMI_ticks`; values above 1 suggest the MMI
+candidate is faster. `clock()` on EE toolchains may have coarse or
+unsupported timing: if it reports zero or unavailable ticks, use an
+EE-specific hardware cycle counter instead. This executable is not
+registered with CTest.
