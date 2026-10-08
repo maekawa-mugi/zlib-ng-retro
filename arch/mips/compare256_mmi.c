@@ -17,6 +17,9 @@
 static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
                                            const uint8_t *src1,
                                            int prefilter64) {
+#ifndef MIPS_MMI_COMPARE64
+    (void)prefilter64;
+#endif
     uint8_t differences[16] ALIGNED_(16);
     uint32_t len = 0;
     /* Different 16-byte alignment residues can never both reach an
