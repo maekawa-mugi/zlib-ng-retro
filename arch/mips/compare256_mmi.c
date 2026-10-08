@@ -22,6 +22,42 @@ Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
     const int same_alignment = (((uintptr_t)src0 ^ (uintptr_t)src1) & 15u) == 0;
 
     while (len < 256) {
+#ifdef MIPS_MMI_COMPARE64
+        /* Fast reject/accept for 64 matching bytes using four independent
+         * 128-bit XORs reduced with POR. If any byte differs, fall back
+         * to the existing 16-byte path to locate the first mismatch.
+         * len<=192 guarantees that the full 64-byte load is in bounds. */
+        if (same_alignment && len <= 192 &&
+            (((uintptr_t)(src0 + len) & 15u) == 0)) {
+            __asm__ volatile (
+                "lq   $8, 0(%[a])\n\t"
+                "lq   $9, 0(%[b])\n\t"
+                "pxor $10, $8, $9\n\t"
+                "lq   $8, 16(%[a])\n\t"
+                "lq   $9, 16(%[b])\n\t"
+                "pxor $8, $8, $9\n\t"
+                "por  $10, $10, $8\n\t"
+                "lq   $8, 32(%[a])\n\t"
+                "lq   $9, 32(%[b])\n\t"
+                "pxor $8, $8, $9\n\t"
+                "por  $10, $10, $8\n\t"
+                "lq   $8, 48(%[a])\n\t"
+                "lq   $9, 48(%[b])\n\t"
+                "pxor $8, $8, $9\n\t"
+                "por  $10, $10, $8\n\t"
+                "sq   $10, 0(%[out])"
+                :
+                : [a] "r" (src0 + len), [b] "r" (src1 + len),
+                  [out] "r" (differences)
+                : "$8", "$9", "$10", "memory"
+            );
+            if ((zng_memread_8(differences) |
+                 zng_memread_8(differences + 8)) == 0) {
+                len += 64;
+                continue;
+            }
+        }
+#endif
         if (same_alignment && len <= 240 &&
             (((uintptr_t)(src0 + len) & 15u) == 0)) {
             /* Keep all three addresses aligned: EE's LQ/SQ mask low bits. */

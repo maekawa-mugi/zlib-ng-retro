@@ -16,6 +16,9 @@ MSA, and must never be enabled for generic MIPS CPUs.
 - `compare256_mmi`: use aligned MMI `LQ`/`PXOR` to find the first mismatched
   byte, with safe scalar paths for incompatible input alignments.
 - MMI-backed `longest_match` variants use the same comparison routine.
+- Optional `WITH_MMI_COMPARE64=ON` adds a 64-byte equality prefilter using
+  `PXOR` and `POR`. A mismatch reuses the original 16-byte path to find
+  its first position. This is OFF by default until real EE benchmarks.
 - `chunkmemset_safe_mmi`: MMI 128-bit LZ77 history copying for aligned
   source/destination addresses and distance >= 16; generic C fallback for
   short-distance, differently aligned, or backward-overlapping copies.
@@ -57,6 +60,10 @@ cmake -S . -B build-ee-adler \
   -DWITH_MMI=ON -DWITH_MMI_ADLER32=ON \
   -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
 cmake --build build-ee-adler --target test_mmi_adler32 bench_mmi_adler32
+
+# Optional 64-byte compare prefilter (benchmark on EE before adopting):
+# cmake -S . -B build-ee-compare64 <your original EE toolchain options> \\
+#   -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON
 ```
 
 `WITH_MMI` is OFF by default. When enabled, CMake requires a working
