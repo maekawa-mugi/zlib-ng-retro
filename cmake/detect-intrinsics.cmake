@@ -479,6 +479,21 @@ macro(check_mmi_asm)
     ]=] HAVE_MMI_ASM)
 endmacro()
 
+# POR is only required by the optional 64-byte MMI comparison prefilter.
+macro(check_mmi_por_asm)
+    check_c_source_compiles([=[
+        int main(void) {
+            unsigned int bytes[4] __attribute__((aligned(16))) = {0};
+            __asm__ __volatile__(
+                "lq $8, 0(%0)\n\t"
+                "por $8, $8, $8\n\t"
+                "sq $8, 0(%0)"
+                : : "r"(bytes) : "$8", "memory");
+            return 0;
+        }
+    ]=] HAVE_MMI_POR_ASM)
+endmacro()
+
 # Additional packed operations used by the opt-in EE Adler-32 routine.
 macro(check_mmi_adler_asm)
     check_c_source_compiles([=[
