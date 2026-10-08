@@ -61,29 +61,29 @@ static inline void slide_hash_mmi_chain(Pos *table, uint32_t entries, Pos wsize,
                 entries -= 32;
             }
         } else {
-        /* Baseline serial load/subtract/store schedule. */
-        while (entries >= 32) {
-            __asm__ volatile (
-                "lq     $8, 0(%[delta])\n\t"
-                "lq     $9, 0(%[ptr])\n\t"
-                "psubuh $9, $9, $8\n\t"
-                "sq     $9, 0(%[ptr])\n\t"
-                "lq     $9, 16(%[ptr])\n\t"
-                "psubuh $9, $9, $8\n\t"
-                "sq     $9, 16(%[ptr])\n\t"
-                "lq     $9, 32(%[ptr])\n\t"
-                "psubuh $9, $9, $8\n\t"
-                "sq     $9, 32(%[ptr])\n\t"
-                "lq     $9, 48(%[ptr])\n\t"
-                "psubuh $9, $9, $8\n\t"
-                "sq     $9, 48(%[ptr])"
-                :
-                : [delta] "r" (delta), [ptr] "r" (p)
-                : "$8", "$9", "memory"
-            );
-            p += 32;
-            entries -= 32;
-        }
+            /* Baseline serial load/subtract/store schedule. */
+            while (entries >= 32) {
+                __asm__ volatile (
+                    "lq     $8, 0(%[delta])\n\t"
+                    "lq     $9, 0(%[ptr])\n\t"
+                    "psubuh $9, $9, $8\n\t"
+                    "sq     $9, 0(%[ptr])\n\t"
+                    "lq     $9, 16(%[ptr])\n\t"
+                    "psubuh $9, $9, $8\n\t"
+                    "sq     $9, 16(%[ptr])\n\t"
+                    "lq     $9, 32(%[ptr])\n\t"
+                    "psubuh $9, $9, $8\n\t"
+                    "sq     $9, 32(%[ptr])\n\t"
+                    "lq     $9, 48(%[ptr])\n\t"
+                    "psubuh $9, $9, $8\n\t"
+                    "sq     $9, 48(%[ptr])"
+                    :
+                    : [delta] "r" (delta), [ptr] "r" (p)
+                    : "$8", "$9", "memory"
+                );
+                p += 32;
+                entries -= 32;
+            }
         }
 
         while (entries >= 8) {
