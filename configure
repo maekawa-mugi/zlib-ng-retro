@@ -116,6 +116,7 @@ builds390vx=1
 buildcrc32la=1
 buildmsa=1
 buildmmi=0
+buildmmiadler32=0
 floatabi=
 # For CPUs that can benefit from AVX512, it seems GCC generates suboptimal
 # instruction scheduling unless you specify a reasonable -mtune= target
@@ -212,6 +213,7 @@ case "$1" in
       echo '    [--without-crc32-la]        Build without vectorized CRC32 on Loongarch' | tee -a configure.log
       echo '    [--without-msa]             Build without MIPS MSA optimizations' | tee -a configure.log
        echo '    [--with-mmi]                 Build for the PlayStation 2 EE (R5900 MMI)' | tee -a configure.log
+        echo '    [--with-mmi-adler32]         Experimental EE MMI Adler-32 (default off)' | tee -a configure.log
       echo '    [--with-reduced-mem]        Reduced memory usage for special cases (reduces performance)' | tee -a configure.log
         exit 0 ;;
     -p*=* | --prefix=*) prefix=$(echo $1 | sed 's/.*=//'); shift ;;
@@ -254,6 +256,7 @@ case "$1" in
     --without-crc32-la) buildcrc32la=0; shift ;;
     --without-msa) buildmsa=0; shift ;;
     --with-mmi) buildmmi=1; shift ;;
+     --with-mmi-adler32) buildmmiadler32=1; shift ;;
     --with-reduced-mem) reducedmem=1; shift ;;
     -a*=* | --archs=*) ARCHS=$(echo $1 | sed 's/.*=//'); shift ;;
     --sysconfdir=*) echo "ignored option: --sysconfdir" | tee -a configure.log; shift ;;
@@ -1923,6 +1926,28 @@ EOF
     fi
 }
 
+check_mmi_adler_asm() {
+    cat > $test.c <<'EOF'
+int main(void) {
+    unsigned int bytes[4] __attribute__((aligned(16))) = {0};
+    unsigned short pairs[8] __attribute__((aligned(16)));
+    __asm__ __volatile__(
+        "lq $8, 0(%0)\n\t"
+        "pextlb $9, $0, $8\n\t"
+        "pextub $10, $0, $8\n\t"
+        "paddh $9, $9, $10\n\t"
+        "sq $9, 0(%1)"
+        : : "r"(bytes), "r"(pairs) : "$8", "$9", "$10", "memory");
+    return pairs[0];
+}
+EOF
+    if try ${CC} ${CFLAGS} $test.c; then
+        HAVE_MMI_ADLER_ASM=1
+    else
+        HAVE_MMI_ADLER_ASM=0
+    fi
+}
+
 check_mmi_asm() {
     # Check assembler support using the actual PS2 EE instructions.
     # A quoted heredoc avoids shell expansion of register names like $8.
@@ -2257,6 +2282,10 @@ EOF
 
         ARCHDIR=arch/mips
 
+        if test $buildmmiadler32 -eq 1 && test $buildmmi -ne 1; then
+            echo "ERROR: --with-mmi-adler32 requires --with-mmi" | tee -a configure.log
+            exit 1
+        fi
         if test $buildmmi -eq 1; then
             if test $without_optimizations -ne 0; then
                 echo "ERROR: --with-mmi requires optimizations" | tee -a configure.log
@@ -2273,6 +2302,17 @@ EOF
             SFLAGS="${SFLAGS} -DDISABLE_RUNTIME_CPU_DETECTION -DMIPS_FEATURES -DMIPS_MMI"
             ARCH_STATIC_OBJS="${ARCH_STATIC_OBJS} slide_hash_mmi.o compare256_mmi.o chunkset_mmi.o"
             ARCH_SHARED_OBJS="${ARCH_SHARED_OBJS} slide_hash_mmi.lo compare256_mmi.lo chunkset_mmi.lo"
+            if test $buildmmiadler32 -eq 1; then
+                check_mmi_adler_asm
+                if test $HAVE_MMI_ADLER_ASM -ne 1; then
+                    echo "ERROR: MMI Adler-32 needs PEXTLB/PEXTUB/PADDH support" | tee -a configure.log
+                    exit 1
+                fi
+                CFLAGS="${CFLAGS} -DMIPS_MMI_ADLER32"
+                SFLAGS="${SFLAGS} -DMIPS_MMI_ADLER32"
+                ARCH_STATIC_OBJS="${ARCH_STATIC_OBJS} adler32_mmi.o"
+                ARCH_SHARED_OBJS="${ARCH_SHARED_OBJS} adler32_mmi.lo"
+            fi
             QEMU_ARCH=
         elif test $without_optimizations -eq 0; then
             check_msa_intrinsics
