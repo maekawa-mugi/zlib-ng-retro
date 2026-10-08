@@ -37,6 +37,8 @@ uint32_t compare256_mmi_plain(const uint8_t *src0, const uint8_t *src1);
 uint32_t compare256_mmi_prefilter64(const uint8_t *src0, const uint8_t *src1);
 #endif
 uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from, size_t len, size_t left);
+uint8_t *chunkmemset_safe_mmi_serial(uint8_t *out, uint8_t *from, size_t len, size_t left);
+uint8_t *chunkmemset_safe_mmi_burst(uint8_t *out, uint8_t *from, size_t len, size_t left);
 uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1);
 uint32_t longest_match_mmi(deflate_state *const s, uint32_t cur_match);
 uint32_t longest_match_slow_knuth_mmi(deflate_state *const s, uint32_t cur_match);
