@@ -45,7 +45,7 @@ cmake -S . -B build-ee \
   -DBUILD_TESTING=ON \
   -DZLIB_COMPAT=ON
 
-cmake --build build-ee --target zlib-ng test_mmi_slide_hash test_mmi_compare256 test_mmi_chunkset
+cmake --build build-ee --target zlib-ng test_mmi_slide_hash test_mmi_compare256 test_mmi_chunkset test_mmi_roundtrip
 ```
 
 `WITH_MMI` is OFF by default. When enabled, CMake requires a working
@@ -55,7 +55,7 @@ If the probe fails, ensure your compiler is targeting the R5900, and for
 cross compilation consider `-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`
 when the compiler test cannot link without an SDK startup/runtime.
 
-All three generated test programs are **EE executables**, not host
+All four generated test programs are **EE executables**, not host
 executables. Run them on actual PS2 hardware using your usual ELF loader.
 Successful output is:
 
@@ -63,6 +63,7 @@ Successful output is:
 MMI slide_hash: PASS
 MMI compare256: PASS
 MMI chunkmemset_safe: PASS
+MMI roundtrip: PASS
 ```
 
 - `test_mmi_slide_hash` compares aligned and unaligned hash arrays with a
@@ -73,6 +74,9 @@ MMI chunkmemset_safe: PASS
 - `test_mmi_chunkset` checks overlapping forward copies, short distances,
   backwards/forward sources, all sixteen alignment offsets, truncated
   output space, and sentinel bytes outside the copied span.
+- `test_mmi_roundtrip` compresses and decompresses four kinds of input
+  patterns at levels 1/6/9, including buffers much larger than 32KB.
+  It detects incorrect decoded bytes, lengths, and error statuses.
 
 For performance testing, compare a normal `WITH_MMI=ON` build to an EE
 baseline using `WITH_MMI=OFF` with otherwise identical build flags.
