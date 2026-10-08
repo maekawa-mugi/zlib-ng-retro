@@ -27,6 +27,15 @@ uint32_t adler32_copy_mmi(uint32_t adler, uint8_t *dst, const uint8_t *src, size
 #ifdef MIPS_MMI
 void slide_hash_mmi(deflate_state *s);
 void slide_hash_head_mmi(deflate_state *s);
+/* Testable scheduling alternatives; default dispatch stays unchanged. */
+void slide_hash_mmi_serial(deflate_state *s);
+void slide_hash_mmi_interleaved(deflate_state *s);
+void slide_hash_head_mmi_serial(deflate_state *s);
+void slide_hash_head_mmi_interleaved(deflate_state *s);
+uint32_t compare256_mmi_plain(const uint8_t *src0, const uint8_t *src1);
+#ifdef MIPS_MMI_COMPARE64
+uint32_t compare256_mmi_prefilter64(const uint8_t *src0, const uint8_t *src1);
+#endif
 uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from, size_t len, size_t left);
 uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1);
 uint32_t longest_match_mmi(deflate_state *const s, uint32_t cur_match);
