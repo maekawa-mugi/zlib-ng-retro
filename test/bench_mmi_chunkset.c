@@ -49,37 +49,50 @@ static clock_t bench(copy_fn fn, unsigned dist, unsigned len,
 }
 
 int main(void) {
-    static const unsigned distances[] = {16, 32, 48, 64, 80, 128, 256, 512};
-    static const unsigned lengths[] = {32, 64, 128, 256, 1024};
+    static const unsigned distances[] = {
+        1, 2, 3, 4, 7, 8, 15, 16, 32, 48, 64, 80, 128, 256, 512
+    };
+    static const unsigned lengths[] = {32, 64, 65, 128, 256, 1024};
     static const unsigned offsets[] = {0, 1, 7, 15};
+    static const copy_fn variants[] = {
+        chunkmemset_safe_c, chunkmemset_safe_mmi_serial,
+        chunkmemset_safe_mmi_burst, chunkmemset_safe_mmi_pattern
+    };
+    const unsigned variant_count = (unsigned)(sizeof(variants)/sizeof(variants[0]));
     printf("MMI LZ77 copy A/B CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("distance length offset serial_ticks burst_ticks serial_over_burst");
+    puts("distance length offset C_ticks serial_ticks burst_ticks pattern_ticks C_over_serial C_over_burst C_over_pattern");
     for (unsigned d = 0; d < sizeof(distances)/sizeof(distances[0]); ++d)
         for (unsigned l = 0; l < sizeof(lengths)/sizeof(lengths[0]); ++l)
             for (unsigned o = 0; o < sizeof(offsets)/sizeof(offsets[0]); ++o) {
                 unsigned dist = distances[d], len = lengths[l], off = offsets[o];
-                if (!validate(chunkmemset_safe_mmi_serial, dist, len, off) ||
-                    !validate(chunkmemset_safe_mmi_burst, dist, len, off)) {
-                    printf("MMI copy benchmark FAIL distance=%u len=%u off=%u\n",
-                           dist, len, off);
-                    return 1;
+                clock_t times[4];
+                for (unsigned v = 0; v < variant_count; ++v) {
+                    if (!validate(variants[v], dist, len, off)) {
+                        printf("MMI copy benchmark FAIL variant=%u dist=%u len=%u off=%u\n",
+                               v, dist, len, off);
+                        return 1;
+                    }
                 }
-                clock_t a, b;
-                const unsigned iters = len >= 1024 ? 2500u : 8000u;
+                const unsigned iterations = len >= 1024 ? 2500u : 8000u;
                 if ((d + l + o) & 1u) {
-                    b = bench(chunkmemset_safe_mmi_burst, dist, len, off, iters);
-                    a = bench(chunkmemset_safe_mmi_serial, dist, len, off, iters);
+                    for (int v = (int)variant_count - 1; v >= 0; --v)
+                        times[v] = bench(variants[v], dist, len, off, iterations);
                 } else {
-                    a = bench(chunkmemset_safe_mmi_serial, dist, len, off, iters);
-                    b = bench(chunkmemset_safe_mmi_burst, dist, len, off, iters);
+                    for (unsigned v = 0; v < variant_count; ++v)
+                        times[v] = bench(variants[v], dist, len, off, iterations);
                 }
-                if (a <= 0 || b <= 0) {
+                if (times[0] <= 0 || times[1] <= 0 ||
+                    times[2] <= 0 || times[3] <= 0) {
                     printf("%u %u %u clock_unavailable_or_too_coarse\n",
                            dist, len, off);
                 } else {
-                    printf("%u %u %u %ld %ld %.3f\n", dist, len, off,
-                           (long)a, (long)b, (double)a / (double)b);
+                    printf("%u %u %u %ld %ld %ld %ld %.3f %.3f %.3f\n",
+                           dist, len, off, (long)times[0], (long)times[1],
+                           (long)times[2], (long)times[3],
+                           (double)times[0] / (double)times[1],
+                           (double)times[0] / (double)times[2],
+                           (double)times[0] / (double)times[3]);
                 }
             }
     printf("benchmark sink=%lu\n", (unsigned long)sink);
