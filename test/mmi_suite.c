@@ -74,8 +74,6 @@ static const suite_entry entries[] = {
 #endif
 };
 
-#define ISSET(name) ((name) ? "ON" : "OFF")
-
 static void usage(const char *name) {
     printf("Usage: %s [--all|--tests|--benches|--smoke|--list|--only NAME] [--fail-fast]\n", name);
     puts("  --all       Run all correctness tests, then all benchmarks (default)");
@@ -108,6 +106,11 @@ static void features(void) {
     puts("MMI_SUITE_FEATURE,chunkset_burst,ON");
 #else
     puts("MMI_SUITE_FEATURE,chunkset_burst,OFF");
+#endif
+#ifdef MIPS_MMI_CHUNKSET_PATTERN
+    puts("MMI_SUITE_FEATURE,chunkset_pattern,ON");
+#else
+    puts("MMI_SUITE_FEATURE,chunkset_pattern,OFF");
 #endif
 #ifdef MIPS_MMI_ADLER32
     puts("MMI_SUITE_FEATURE,adler32,ON");
