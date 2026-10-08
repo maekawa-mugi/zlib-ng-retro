@@ -14,16 +14,31 @@ uint32_t adler32_copy_msa(uint32_t adler, uint8_t *dst, const uint8_t *src, size
 void slide_hash_msa(deflate_state *s);
 #endif
 
+#ifdef MIPS_MMI
+void slide_hash_mmi(deflate_state *s);
+void slide_hash_head_mmi(deflate_state *s);
+#endif
+
 #define CHUNKSET_FALLBACK
 #define COMPARE256_FALLBACK
 #define CRC32_BRAID_FALLBACK
 
 #if !defined(MIPS_MSA_NATIVE)
 #  define ADLER32_FALLBACK
+#endif
+#if !defined(MIPS_MSA_NATIVE) && !defined(MIPS_MMI_NATIVE)
 #  define SLIDE_HASH_FALLBACK
 #endif
 
 #ifdef DISABLE_RUNTIME_CPU_DETECTION
+// PS2 EE - MMI
+#  ifdef MIPS_MMI_NATIVE
+#    undef native_slide_hash
+#    define native_slide_hash slide_hash_mmi
+#    undef native_slide_hash_head
+#    define native_slide_hash_head slide_hash_head_mmi
+#  endif
+
 // MIPS - MSA
 #  ifdef MIPS_MSA_NATIVE
 #    undef native_adler32
