@@ -219,7 +219,7 @@ cmake -S . -B build-ee-chorba \
   -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
   -DWITH_MMI=ON -DWITH_MMI_CHORBA=ON -DWITH_CRC32_CHORBA=ON \
   -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
-cmake --build build-ee-chorba --target zlib-ng test_mmi_chorba test_mmi_roundtrip
+cmake --build build-ee-chorba --target zlib-ng test_mmi_chorba test_mmi_roundtrip bench_mmi_chorba
 ```
 
 Run `test_mmi_chorba` on the PS2. Expected: `MMI Chorba: PASS`.
@@ -228,3 +228,18 @@ input alignments, CRC seeds, repeated patterns, copy variants, and
 streaming splits. Compare large-buffer throughput on actual EE
 hardware before enabling this globally. The 1024-byte ring traffic
 and 704-byte finalization can make small inputs slower than braid.
+
+The polynomial and inverse shift constants can be reproduced independently
+on a host computer (Python standard library only):
+
+```sh
+python3 test/gen_mmi_chorba.py
+```
+
+The script verifies the degree-44 reciprocal CRC polynomial, its
+power-of-two scaling to 128-bit lanes, the inverse shift matrix and a
+reference emulation against Python's standard CRC32. Hardware correctness
+still requires `test_mmi_chorba` on a PS2. Run `bench_mmi_chorba` for
+an initial braid-vs-MMI throughput comparison; results are subject to the
+toolchain's `clock()` resolution. In particular, the MMI algorithm's
+scratch-ring traffic may outweigh its XOR throughput benefit.

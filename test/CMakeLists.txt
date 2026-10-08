@@ -81,6 +81,14 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
         endif()
         add_test(NAME mmi_chorba
             COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_chorba>)
+
+        add_executable(bench_mmi_chorba bench_mmi_chorba.c)
+        configure_test_executable(bench_mmi_chorba)
+        if(NOT DEFINED BUILD_SHARED_LIBS)
+            target_link_libraries(bench_mmi_chorba zlib-ng-static)
+        else()
+            target_link_libraries(bench_mmi_chorba zlib-ng)
+        endif()
     endif()
 
     if(WITH_MMI_ADLER32)
