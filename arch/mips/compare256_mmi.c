@@ -14,7 +14,9 @@
 #include "deflate.h"
 #include "fallback_builtins.h"
 
-Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
+static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
+                                           const uint8_t *src1,
+                                           int prefilter64) {
     uint8_t differences[16] ALIGNED_(16);
     uint32_t len = 0;
     /* Different 16-byte alignment residues can never both reach an
@@ -28,7 +30,7 @@ Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
          * 128-bit XORs reduced with POR. If any byte differs, fall back
          * to the existing 16-byte path to locate the first mismatch.
          * len<=192 guarantees that the full 64-byte load is in bounds. */
-        if (same_alignment && len <= 192 &&
+        if (prefilter64 && same_alignment && len <= 192 &&
             (((uintptr_t)(src0 + len) & 15u) == 0)) {
             __asm__ volatile (
                 "lq   $8, 0(%[a])\n\t"
@@ -99,6 +101,27 @@ Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
         }
     }
     return 256;
+}
+
+/* Keep both paths available for exhaustive correctness testing and A/B
+ * timing in the same EE executable. Only the selected public routine is
+ * used by the deflate dispatch. */
+Z_INTERNAL uint32_t compare256_mmi_plain(const uint8_t *a, const uint8_t *b) {
+    return compare256_mmi_impl(a, b, 0);
+}
+
+#ifdef MIPS_MMI_COMPARE64
+Z_INTERNAL uint32_t compare256_mmi_prefilter64(const uint8_t *a, const uint8_t *b) {
+    return compare256_mmi_impl(a, b, 1);
+}
+#endif
+
+Z_INTERNAL uint32_t compare256_mmi(const uint8_t *a, const uint8_t *b) {
+#ifdef MIPS_MMI_COMPARE64
+    return compare256_mmi_prefilter64(a, b);
+#else
+    return compare256_mmi_plain(a, b);
+#endif
 }
 
 /* Replace the three longest-match variants as well, so the comparison is
