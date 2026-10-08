@@ -16,6 +16,8 @@ void slide_hash_msa(deflate_state *s);
 
 #ifdef MIPS_MMI_CHORBA
 uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t len);
+uint32_t crc32_chorba_mmi_single(uint32_t crc, const uint8_t *buf, size_t len);
+uint32_t crc32_chorba_mmi_paired(uint32_t crc, const uint8_t *buf, size_t len);
 uint32_t crc32_copy_chorba_mmi(uint32_t crc, uint8_t *dst, const uint8_t *src, size_t len);
 #endif
 
