@@ -21,6 +21,7 @@ printf 'variant,feature,elf\n' > "$OUT/manifest.csv"
 build_one() {
     label=$1
     feature=$2
+    shift 2
     builddir="$WORK/$label"
     echo "Building $label ($feature) ..."
     cmake -S "$ROOT" -B "$builddir" \
