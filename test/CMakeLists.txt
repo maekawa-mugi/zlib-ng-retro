@@ -15,6 +15,19 @@ if(TEST_STOCK_ZLIB)
     add_definitions(-DTEST_STOCK_ZLIB)
 endif()
 
+# This test exercises actual EE MMI instructions and must run on PS2 hardware.
+# It links statically so the internal slide_hash symbols are available.
+if(BASEARCH_MIPS_FOUND AND WITH_MMI)
+    if(BUILD_SHARED_LIBS)
+        message(FATAL_ERROR "The MMI slide_hash test requires BUILD_SHARED_LIBS=OFF")
+    endif()
+    add_executable(test_mmi_slide_hash test_mmi_slide_hash.c)
+    configure_test_executable(test_mmi_slide_hash)
+    target_link_libraries(test_mmi_slide_hash zlib-ng)
+    add_test(NAME mmi_slide_hash
+        COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_slide_hash>)
+endif()
+
 add_executable(example example.c)
 configure_test_executable(example)
 target_link_libraries(example zlib-ng)
