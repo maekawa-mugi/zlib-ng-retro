@@ -12,8 +12,9 @@
 #include "zbuild.h"
 #include "arch_functions.h"
 
-Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
-                                         size_t len, size_t left) {
+static inline uint8_t *chunkmemset_safe_mmi_impl(uint8_t *out, uint8_t *from,
+                                                  size_t len, size_t left,
+                                                  int burst) {
     size_t n = MIN(len, left);
     uint8_t *dst = out;
     const uint8_t *src = from;
@@ -36,9 +37,26 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
         --n;
     }
 
-    /* Interleave loads and stores. Loading all four input blocks before
-     * storing them would break the distance-16 overlapping case. */
+    /* The 4-load burst is safe only if the history distance is at least
+     * 64: for distance 16/32/48, later loads must see earlier writes.
+     * Keep the serial schedule as the baseline and for close overlaps. */
+    const uintptr_t distance = (uintptr_t)out - (uintptr_t)from;
     while (n >= 64) {
+        if (burst && distance >= 64) {
+            __asm__ volatile (
+                "lq $8, 0(%[src])\n\t"
+                "lq $9, 16(%[src])\n\t"
+                "lq $10, 32(%[src])\n\t"
+                "lq $11, 48(%[src])\n\t"
+                "sq $8, 0(%[dst])\n\t"
+                "sq $9, 16(%[dst])\n\t"
+                "sq $10, 32(%[dst])\n\t"
+                "sq $11, 48(%[dst])"
+                :
+                : [src] "r" (src), [dst] "r" (dst)
+                : "$8", "$9", "$10", "$11", "memory"
+            );
+        } else {
         __asm__ volatile (
             "lq $8, 0(%[src])\n\t"
             "sq $8, 0(%[dst])\n\t"
@@ -52,6 +70,7 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
             : [src] "r" (src), [dst] "r" (dst)
             : "$8", "memory"
         );
+        }
         dst += 64;
         src += 64;
         n -= 64;
@@ -74,5 +93,26 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
         *dst++ = *src++;
 
     return dst;
+}
+
+/* Both functions remain linked for same-run correctness and timing tests.
+ * Production dispatch uses serial unless the experiment is selected. */
+Z_INTERNAL uint8_t *chunkmemset_safe_mmi_serial(uint8_t *out, uint8_t *from,
+                                                size_t len, size_t left) {
+    return chunkmemset_safe_mmi_impl(out, from, len, left, 0);
+}
+
+Z_INTERNAL uint8_t *chunkmemset_safe_mmi_burst(uint8_t *out, uint8_t *from,
+                                               size_t len, size_t left) {
+    return chunkmemset_safe_mmi_impl(out, from, len, left, 1);
+}
+
+Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
+                                         size_t len, size_t left) {
+#ifdef MIPS_MMI_CHUNKSET_BURST
+    return chunkmemset_safe_mmi_burst(out, from, len, left);
+#else
+    return chunkmemset_safe_mmi_serial(out, from, len, left);
+#endif
 }
 #endif /* MIPS_MMI */
