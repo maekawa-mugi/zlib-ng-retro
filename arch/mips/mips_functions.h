@@ -23,6 +23,8 @@ uint32_t crc32_copy_chorba_mmi(uint32_t crc, uint8_t *dst, const uint8_t *src, s
 
 #ifdef MIPS_MMI_ADLER32
 uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len);
+uint32_t adler32_mmi_prefix(uint32_t adler, const uint8_t *buf, size_t len);
+uint32_t adler32_mmi_formula(uint32_t adler, const uint8_t *buf, size_t len);
 uint32_t adler32_copy_mmi(uint32_t adler, uint8_t *dst, const uint8_t *src, size_t len);
 uint32_t adler32_copy_mmi_twopass(uint32_t adler, uint8_t *dst, const uint8_t *src, size_t len);
 uint32_t adler32_copy_mmi_fused(uint32_t adler, uint8_t *dst, const uint8_t *src, size_t len);
