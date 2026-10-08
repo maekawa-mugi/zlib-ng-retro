@@ -372,3 +372,62 @@ cmake --build build-ee-extended --target \
 toolchain or executed on PS2 hardware by the contributor of this PR.
 Do not enable experimental production flags merely because generic
 host-side arithmetic tests pass.
+
+
+## Additional experimental compare and CRC-copy paths
+
+### compare256 64-bit first-difference search
+
+`WITH_MMI_COMPARE_SWAR=ON` switches the mismatch-location search after
+a 16-byte LQ/PXOR comparison from the original bytewise loop to the
+endianness-aware `zng_first_diff_byte64()` primitive. This reuses the two
+64-bit words already read for the all-equal check and searches the first
+nonzero half. It does not change the unaligned pointer fallback.
+
+The 64-byte prefilter (`WITH_MMI_COMPARE64`) and the SWAR locator are
+**independent toggles**; both remain OFF by default. The test compares
+four combinations on a single binary when prefilter64 is enabled.
+`test_mmi_compare256` now runs all 257 first-mismatch positions, including
+equal inputs, for all 16x16 source alignment residues: 65,792 cases
+per strategy. `bench_mmi_compare256` times generic C and the four
+MMI strategies on identical hardware.
+
+### Chorba CRC32 fused copy
+
+`WITH_MMI_CHORBA_FUSED_COPY=ON` switches the regular
+`crc32_copy_chorba_mmi` dispatch to an experimental fused copy.
+The original `crc32_copy_chorba_mmi_twopass` remains available.
+
+The fused routine copies the *original* source bytes while applying CRC
+polynomial taps. For 16-byte-aligned destinations after prefix peeling,
+the source input quadword is SQ-stored to the output before applying PXOR.
+The first block must instead be copied from the original source because
+Chorba has already folded the CRC seed into its temporary first vector.
+Unaligned destinations and small-input braid fallbacks use a safe
+ordinary copy. The function retains the same non-overlapping `memcpy`
+contract as the baseline.
+
+`test_mmi_chorba` checks production, two-pass, and fused variants with
+the original braid CRC, including different source/destination alignments,
+sentinel bytes and input preservation. The new
+`bench_mmi_chorba_copy` compares both paths directly.
+
+### Suggested EE build
+
+```sh
+cmake -S . -B build-ee-more \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DWITH_MMI_ADLER32=ON \
+  -DWITH_MMI_CHORBA=ON -DWITH_CRC32_CHORBA=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+
+cmake --build build-ee-more --target \
+  test_mmi_compare256 bench_mmi_compare256 \
+  test_mmi_chorba bench_mmi_chorba_copy \
+  test_mmi_roundtrip bench_mmi_roundtrip
+```
+
+These new dispatch toggles must be benchmarked on real PS2 Linux before
+production use. Passing host-only arithmetic models does not constitute
+MMI instruction correctness or timing validation.
