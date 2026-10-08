@@ -25,7 +25,10 @@
 #define CHORBA_MMI_RING_BYTES 1024u
 #define CHORBA_MMI_RING_MASK  (CHORBA_MMI_RING_BYTES - 1u)
 #define CHORBA_MMI_RESIDUE    704u
-#define CHORBA_MMI_THRESHOLD  4096u
+#ifndef MIPS_MMI_CHORBA_THRESHOLD
+#  define MIPS_MMI_CHORBA_THRESHOLD 4096u
+#endif
+#define CHORBA_MMI_THRESHOLD MIPS_MMI_CHORBA_THRESHOLD
 
 /* Exponents 1,3,7,9,12,13,28,37,39,44 scaled by 16 bytes.
  * Note: the chronological offsets use the *low-to-high* polynomial
@@ -90,12 +93,13 @@ static inline void chorba_mmi_xor_store_pair(uint8_t *first, uint8_t *second,
 }
 
 static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
-                                      size_t len, int paired, uint8_t *copydst) {
+                                      size_t len, int paired, uint8_t *copydst,
+                                      size_t threshold) {
     size_t align = ((uintptr_t)buf & 15u);
     if (align != 0)
         align = 16u - align;
 
-    if (len < CHORBA_MMI_THRESHOLD + align) {
+    if (len < threshold + align) {
         uint32_t result = crc32_braid(crc, buf, len);
         if (copydst != NULL && len != 0)
             memcpy(copydst, buf, len);
@@ -202,12 +206,12 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
 
 Z_INTERNAL uint32_t crc32_chorba_mmi_single(uint32_t crc, const uint8_t *buf,
                                              size_t len) {
-    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL);
+    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL, CHORBA_MMI_THRESHOLD);
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi_paired(uint32_t crc, const uint8_t *buf,
                                              size_t len) {
-    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL);
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL, CHORBA_MMI_THRESHOLD);
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t len) {
@@ -216,6 +220,35 @@ Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t le
 #else
     return crc32_chorba_mmi_single(crc, buf, len);
 #endif
+}
+
+/* Crossover choices for one-run EE measurements. All three execute the
+ * exact same CRC scatter; only the braid-vs-Chorba size threshold differs. */
+static uint32_t crc32_chorba_mmi_at_threshold(uint32_t crc,
+                                                const uint8_t *buf,
+                                                size_t len,
+                                                size_t threshold) {
+#ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL, threshold);
+#else
+    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL, threshold);
+#endif
+}
+
+Z_INTERNAL uint32_t crc32_chorba_mmi_threshold1024(uint32_t crc,
+                                                    const uint8_t *buf,
+                                                    size_t len) {
+    return crc32_chorba_mmi_at_threshold(crc, buf, len, 1024u);
+}
+Z_INTERNAL uint32_t crc32_chorba_mmi_threshold4096(uint32_t crc,
+                                                    const uint8_t *buf,
+                                                    size_t len) {
+    return crc32_chorba_mmi_at_threshold(crc, buf, len, 4096u);
+}
+Z_INTERNAL uint32_t crc32_chorba_mmi_threshold8192(uint32_t crc,
+                                                    const uint8_t *buf,
+                                                    size_t len) {
+    return crc32_chorba_mmi_at_threshold(crc, buf, len, 8192u);
 }
 
 Z_INTERNAL uint32_t crc32_copy_chorba_mmi_twopass(uint32_t crc, uint8_t *dst,
@@ -232,9 +265,9 @@ Z_INTERNAL uint32_t crc32_copy_chorba_mmi_twopass(uint32_t crc, uint8_t *dst,
 Z_INTERNAL uint32_t crc32_copy_chorba_mmi_fused(uint32_t crc, uint8_t *dst,
                                                  const uint8_t *src, size_t len) {
 #ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
-    return crc32_chorba_mmi_impl(crc, src, len, 1, dst);
+    return crc32_chorba_mmi_impl(crc, src, len, 1, dst, CHORBA_MMI_THRESHOLD);
 #else
-    return crc32_chorba_mmi_impl(crc, src, len, 0, dst);
+    return crc32_chorba_mmi_impl(crc, src, len, 0, dst, CHORBA_MMI_THRESHOLD);
 #endif
 }
 
