@@ -12,6 +12,10 @@
 #endif
 
 uint32_t Z_INTERNAL compare256_mmi(const uint8_t *, const uint8_t *);
+uint32_t Z_INTERNAL compare256_mmi_plain(const uint8_t *, const uint8_t *);
+#ifdef MIPS_MMI_COMPARE64
+uint32_t Z_INTERNAL compare256_mmi_prefilter64(const uint8_t *, const uint8_t *);
+#endif
 
 static uint8_t a[288] ALIGNED_(16);
 static uint8_t b[288] ALIGNED_(16);
