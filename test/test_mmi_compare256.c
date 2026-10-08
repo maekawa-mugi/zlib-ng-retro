@@ -64,7 +64,9 @@ int main(void) {
         }
 
     for (unsigned mismatch = 0; mismatch <= 256; mismatch++) {
-        if (check(0, 0, mismatch) || check(1, 1, mismatch))
+        if (check(0, 0, mismatch) || check(1, 1, mismatch) ||
+            check(0, 1, mismatch) || check(7, 15, mismatch) ||
+            check(15, 0, mismatch))
             return 1;
     }
     puts("MMI compare256: PASS");
