@@ -22,7 +22,7 @@ Z_INTERNAL uint32_t compare256_mmi(const uint8_t *src0, const uint8_t *src1) {
     const int same_alignment = (((uintptr_t)src0 ^ (uintptr_t)src1) & 15u) == 0;
 
     while (len < 256) {
-        if (same_alignment &&
+        if (same_alignment && len <= 240 &&
             (((uintptr_t)(src0 + len) & 15u) == 0)) {
             /* Keep all three addresses aligned: EE's LQ/SQ mask low bits. */
             __asm__ volatile (
