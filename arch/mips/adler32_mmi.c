@@ -10,6 +10,7 @@
 #include "zbuild.h"
 #include "arch_functions.h"
 #include "adler32_p.h"
+#include "adler32_mmi_math.h"
 
 Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) {
     uint32_t a = adler & 0xffffu, b = adler >> 16;
@@ -28,8 +29,6 @@ Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) 
         }
         while (n >= 16) {
             uint16_t pairs[8] ALIGNED_(16);
-            uint32_t sum16 = 0, weighted = 0;
-
             /* Both buf and pairs are 16-byte aligned (LQ/SQ mask low 4 bits).
              * On little-endian EE, lane i contains buf[i] + buf[8+i]. */
             __asm__ volatile (
@@ -43,14 +42,9 @@ Z_INTERNAL uint32_t adler32_mmi(uint32_t adler, const uint8_t *buf, size_t len) 
                 : "$8", "$9", "$10", "memory"
             );
 
-            for (unsigned i = 0; i < 8; i++)
-                sum16 += pairs[i];
-            for (unsigned i = 0; i < 16; i++)
-                weighted += (16u - i) * (uint32_t)buf[i];
-
-            /* Equivalent to 16 iterations of b += a += byte. */
-            b += 16u * a + weighted;
-            a += sum16;
+            /* The first eight bytes and eight pair sums suffice for
+             * the exact positional sum. No 16-element multiply loop. */
+            adler32_mmi_reduce16(&a, &b, pairs, buf);
             buf += 16;
             n -= 16;
         }
