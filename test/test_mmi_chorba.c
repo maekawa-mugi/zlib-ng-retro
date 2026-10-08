@@ -1,0 +1,82 @@
+/* EE MMI Chorba differential test against generic braid CRC-32.
+ * Run on actual PlayStation 2 hardware with WITH_MMI_CHORBA=ON. */
+#include "zbuild.h"
+#include "arch_functions.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#ifndef MIPS_MMI_CHORBA
+#  error "This test requires WITH_MMI_CHORBA=ON"
+#endif
+
+#define MAX_INPUT (262144u + 16u)
+static uint8_t input[MAX_INPUT] ALIGNED_(16);
+static uint8_t copy[MAX_INPUT] ALIGNED_(16);
+static uint8_t snapshot[MAX_INPUT] ALIGNED_(16);
+static uint32_t rng = 0x9e3779b9u;
+
+static uint32_t next_rng(void) {
+    rng ^= rng << 13;
+    rng ^= rng >> 17;
+    rng ^= rng << 5;
+    return rng;
+}
+
+static int run_case(const uint8_t *src, size_t len, uint32_t seed,
+                    unsigned alignment) {
+    uint32_t expected = crc32_braid(seed, src, len);
+    uint32_t got = crc32_chorba_mmi(seed, src, len);
+    if (expected != got) {
+        printf("MMI Chorba FAIL len=%lu align=%u seed=%08lx ref=%08lx got=%08lx\n",
+               (unsigned long)len, alignment, (unsigned long)seed,
+               (unsigned long)expected, (unsigned long)got);
+        return 1;
+    }
+
+    memcpy(snapshot, src, len);
+    memset(copy, 0xa5, len + 1);
+    got = crc32_copy_chorba_mmi(seed, copy, src, len);
+    if (got != expected || memcmp(copy, src, len) != 0 ||
+        copy[len] != 0xa5 || memcmp(src, snapshot, len) != 0) {
+        printf("MMI Chorba copy/input modification FAIL len=%lu align=%u\n",
+               (unsigned long)len, alignment);
+        return 1;
+    }
+
+    /* Streaming calls must match one-shot CRC regardless of split. */
+    size_t cut = len / 3;
+    got = crc32_chorba_mmi(seed, src, cut);
+    got = crc32_chorba_mmi(got, src + cut, len - cut);
+    if (got != expected) {
+        printf("MMI Chorba streaming FAIL len=%lu align=%u\n",
+               (unsigned long)len, alignment);
+        return 1;
+    }
+    return 0;
+}
+
+int main(void) {
+    static const size_t lengths[] = {
+        0, 1, 15, 16, 31, 63, 256, 1024, 4095, 4096,
+        4097, 8191, 8192, 8193, 16384, 32768, 65536, 262144
+    };
+    static const uint32_t seeds[] = {0u, 1u, 0xffffffffu, 0x12345678u};
+
+    for (unsigned pattern = 0; pattern < 4; pattern++) {
+        for (unsigned i = 0; i < sizeof(input); i++) {
+            uint32_t v = next_rng();
+            input[i] = pattern == 0 ? (uint8_t)v :
+                       pattern == 1 ? 0xffu :
+                       pattern == 2 ? 0u : (uint8_t)i;
+        }
+        for (unsigned offset = 0; offset < 16; offset++)
+            for (unsigned i = 0; i < sizeof(lengths) / sizeof(lengths[0]); i++)
+                for (unsigned j = 0; j < sizeof(seeds) / sizeof(seeds[0]); j++)
+                    if (run_case(input + offset, lengths[i], seeds[j], offset))
+                        return 1;
+    }
+
+    puts("MMI Chorba: PASS");
+    return 0;
+}
