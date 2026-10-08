@@ -31,6 +31,16 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     add_test(NAME mmi_slide_hash
         COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:test_mmi_slide_hash>)
 
+    # Both serial and interleaved variants are linked into the MMI library.
+    # This benchmark does not need a separate build or CTest entry.
+    add_executable(bench_mmi_slide_hash bench_mmi_slide_hash.c)
+    configure_test_executable(bench_mmi_slide_hash)
+    if(NOT DEFINED BUILD_SHARED_LIBS)
+        target_link_libraries(bench_mmi_slide_hash zlib-ng-static)
+    else()
+        target_link_libraries(bench_mmi_slide_hash zlib-ng)
+    endif()
+
     add_executable(test_mmi_compare256 test_mmi_compare256.c)
     configure_test_executable(test_mmi_compare256)
     if(NOT DEFINED BUILD_SHARED_LIBS)
