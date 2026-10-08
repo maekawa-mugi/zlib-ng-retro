@@ -27,6 +27,7 @@ static uint32_t random32(void) {
 }
 static uint8_t cmpa[288] ALIGNED_(16), cmpb[288] ALIGNED_(16);
 static uint8_t actual[4096] ALIGNED_(16), expected[4096] ALIGNED_(16);
+static uint8_t original[4096] ALIGNED_(16);
 #ifdef MIPS_MMI_ADLER32
 static uint8_t adler_src[32768 + 32] ALIGNED_(16);
 static uint8_t adler_dst[32768 + 32] ALIGNED_(16);
@@ -80,22 +81,13 @@ static int test_copies(void) {
         unsigned left = random32() % 513u;
         const unsigned n = length < left ? length : left;
         const unsigned outpos = 1024u + offset;
-        for (unsigned i = 0; i < sizeof(actual); ++i)
-            actual[i] = expected[i] = (uint8_t)random32();
+        for (unsigned i = 0; i < sizeof(original); ++i)
+            original[i] = (uint8_t)random32();
+        memcpy(expected, original, sizeof(expected));
         for (unsigned i = 0; i < n; ++i)
             expected[outpos + i] = expected[outpos + i - distance];
         for (unsigned variant = 0; variant < sizeof(variants)/sizeof(variants[0]); ++variant) {
-            for (unsigned i = 0; i < sizeof(actual); ++i)
-                actual[i] = expected[i];
-            /* Reconstruct original source/destination without carrying
-             * reference modifications into the candidate buffer. */
-            for (unsigned i = 0; i < sizeof(actual); ++i)
-                actual[i] = (uint8_t)(i * 31u + 7u);
-            for (unsigned i = 0; i < sizeof(actual); ++i)
-                expected[i] = actual[i];
-            for (unsigned i = 0; i < n; ++i)
-                expected[outpos + i] = expected[outpos + i - distance];
-
+            memcpy(actual, original, sizeof(actual));
             uint8_t *end = variants[variant](actual + outpos,
                                                actual + outpos - distance,
                                                length, left);
