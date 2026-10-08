@@ -1932,6 +1932,7 @@ int main(void) {
     __asm__ __volatile__(
         "lq $8, 0(%0)\n\t"
         "psubuh $8, $8, $8\n\t"
+        "pxor $8, $8, $8\n\t"
         "sq $8, 0(%0)"
         : : "r"(data) : "$8", "memory");
     return 0;
@@ -2263,7 +2264,7 @@ EOF
             fi
             check_mmi_asm
             if test $HAVE_MMI_ASM -ne 1; then
-                echo "ERROR: --with-mmi requires an EE toolchain supporting LQ/PSUBUH/SQ" | tee -a configure.log
+                echo "ERROR: --with-mmi requires an EE toolchain supporting LQ/SQ/PSUBUH/PXOR" | tee -a configure.log
                 exit 1
             fi
 

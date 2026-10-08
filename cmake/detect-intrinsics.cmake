@@ -471,6 +471,7 @@ macro(check_mmi_asm)
             __asm__ __volatile__(
                 "lq $8, 0(%0)\n\t"
                 "psubuh $8, $8, $8\n\t"
+                "pxor $8, $8, $8\n\t"
                 "sq $8, 0(%0)"
                 : : "r"(data) : "$8", "memory");
             return 0;

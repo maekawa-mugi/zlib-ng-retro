@@ -828,7 +828,7 @@ if(WITH_OPTIM)
             check_mmi_asm()
             if(NOT HAVE_MMI_ASM)
                 message(FATAL_ERROR
-                    "WITH_MMI requires an EE-targeted compiler and assembler supporting LQ, PSUBUH and SQ")
+                    "WITH_MMI requires an EE-targeted compiler and assembler supporting LQ, SQ, PSUBUH and PXOR")
             endif()
 
             add_definitions(-DMIPS_FEATURES -DMIPS_MMI)
