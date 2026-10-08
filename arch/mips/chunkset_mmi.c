@@ -57,19 +57,19 @@ static inline uint8_t *chunkmemset_safe_mmi_impl(uint8_t *out, uint8_t *from,
                 : "$8", "$9", "$10", "$11", "memory"
             );
         } else {
-        __asm__ volatile (
-            "lq $8, 0(%[src])\n\t"
-            "sq $8, 0(%[dst])\n\t"
-            "lq $8, 16(%[src])\n\t"
-            "sq $8, 16(%[dst])\n\t"
-            "lq $8, 32(%[src])\n\t"
-            "sq $8, 32(%[dst])\n\t"
-            "lq $8, 48(%[src])\n\t"
-            "sq $8, 48(%[dst])"
-            :
-            : [src] "r" (src), [dst] "r" (dst)
-            : "$8", "memory"
-        );
+            __asm__ volatile (
+                "lq $8, 0(%[src])\n\t"
+                "sq $8, 0(%[dst])\n\t"
+                "lq $8, 16(%[src])\n\t"
+                "sq $8, 16(%[dst])\n\t"
+                "lq $8, 32(%[src])\n\t"
+                "sq $8, 32(%[dst])\n\t"
+                "lq $8, 48(%[src])\n\t"
+                "sq $8, 48(%[dst])"
+                :
+                : [src] "r" (src), [dst] "r" (dst)
+                : "$8", "memory"
+            );
         }
         dst += 64;
         src += 64;
