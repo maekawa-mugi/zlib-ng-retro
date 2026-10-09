@@ -15,7 +15,9 @@
 #define MAX_BENCH (1024u * 1024u)
 #ifdef PS2_SPR_BENCH
 extern uint32_t crc32_chorba_mmi_spr_bench(uint32_t, const uint8_t *, size_t);
-#define CHORBA_VARIANTS 7
+extern uint32_t crc32_chorba_mmi_spr_residue_bench(uint32_t, const uint8_t *, size_t);
+extern uint32_t crc32_chorba_mmi_spr_both_bench(uint32_t, const uint8_t *, size_t);
+#define CHORBA_VARIANTS 9
 #else
 #define CHORBA_VARIANTS 6
 #endif
@@ -40,7 +42,7 @@ int main(void) {
     static const char *const names[] = {
         "braid", "single", "paired", "threshold1K", "threshold4K", "threshold8K"
 #ifdef PS2_SPR_BENCH
-        , "spr_ring"
+        , "spr_ring", "spr_residue", "spr_both"
 #endif
     };
     ps2_bench_candidates("chorba", names, CHORBA_VARIANTS, 1);
@@ -58,7 +60,9 @@ int main(void) {
         crc32_chorba_mmi_threshold4096,
         crc32_chorba_mmi_threshold8192
 #ifdef PS2_SPR_BENCH
-        , crc32_chorba_mmi_spr_bench
+        , crc32_chorba_mmi_spr_bench,
+          crc32_chorba_mmi_spr_residue_bench,
+          crc32_chorba_mmi_spr_both_bench
 #endif
     };
     uint32_t rng = 0x5a17e4b3u;
@@ -71,7 +75,7 @@ int main(void) {
     puts("CRC32 bench: columns size offset reps, one ticks/variant, then braid/variant ratios");
     puts("variant order: braid single paired threshold1K threshold4K threshold8K"
 #ifdef PS2_SPR_BENCH
-         " spr_ring"
+         " spr_ring spr_residue spr_both"
 #endif
          );
 
