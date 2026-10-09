@@ -19,32 +19,77 @@ static unsigned full_run;
 static clock_t last_draw;
 static const char *first_failed;
 static int initialized;
+static int screen_started, finished;
+static unsigned final_failures;
 
+/* Fixed GS coordinates; no newline/scrolling and no arbitrary diagnostic
+ * strings at row 24. A full table is updated while tests and timing run. */
 static void draw(void) {
-    scr_clear(); scr_setXY(0,0); scr_setfontcolor(WHITE);
-    scr_printf("EE MMI auto-compare (%s)\n", full_run ? "full" : "quick");
-    scr_printf("Winner is valid only if all candidates pass.\n");
-    scr_printf("Same workload, summed clock ticks (lower wins)\n\n");
-    for (unsigned i = 0; i < rank_state.count; ++i) {
-        const mmi_rank_group *g = &rank_state.groups[i];
-        int best = mmi_rank_winner(g);
-        scr_setfontcolor(best < 0 ? GRAY : GREEN);
-        if (best >= 0) {
-            const double ratio = g->v[best].ticks > 0 ?
-                g->v[0].ticks / g->v[best].ticks : 0;
-            scr_printf("%-15s %-15s x%.2f (%u options)\n",
-                       g->name, g->v[best].name, ratio, g->count);
-        } else if (!g->competitive) {
-            scr_printf("%-15s checks+timing (not A/B)\n", g->name);
+    unsigned i;
+    if (!screen_started) {
+        scr_clear();
+        screen_started = 1;
+    }
+    scr_setfontcolor(WHITE); scr_setXY(0,0);
+    scr_printf("ZLIB-NG RETRO | PS2 EE MMI | VALIDATION + BENCHMARK");
+    scr_setXY(0,1);
+    scr_printf("Mode: %-5s | every winner requires passed checks + timing",
+               full_run ? "FULL" : "QUICK");
+    scr_setXY(0,2);
+    scr_printf("%-15s %-16s %-9s %s", "FUNCTION", "PROVISIONAL BEST", "SPEED", "STATE");
+    for (i = 0; i < MMI_RANK_GROUPS; ++i) {
+        scr_setXY(0,4+(int)i);
+        if (i < rank_state.count) {
+            const mmi_rank_group *g = &rank_state.groups[i];
+            int best = mmi_rank_winner(g);
+            if (best >= 0) {
+                double ratio = g->v[best].ticks > 0 ?
+                    g->v[0].ticks / g->v[best].ticks : 0.0;
+                scr_setfontcolor(GREEN);
+                scr_printf("%-15.15s %-16.16s %5.2fx    %-8s    ",
+                           g->name, g->v[best].name, ratio, "PASS");
+            } else if (!g->competitive) {
+                scr_setfontcolor(WHITE);
+                scr_printf("%-15.15s %-16s %-9s %-8s     ",
+                           g->name, "N/A", "--", "CHECKS");
+            } else {
+                scr_setfontcolor(GRAY);
+                scr_printf("%-15.15s %-16s %-9s %-8s     ",
+                           g->name, "PENDING", "--", "CHECKING");
+            }
         } else {
-            scr_printf("%-15s pending / failed / invalid timing\n", g->name);
+            scr_setfontcolor(GRAY);
+            scr_printf("%-15s %-16s %-9s %-8s     ",
+                       "--", "WAIT", "--", "WAIT");
         }
     }
     scr_setfontcolor(WHITE);
-    scr_printf("\n%s\n%s\n", progress, case_progress);
-    scr_printf("Independent tests: pass=%u fail=%u\n", tests_ok, tests_failed);
-    if (first_failed) { scr_setfontcolor(RED); scr_printf("First fail: %s\n", first_failed); }
+    scr_setXY(0,17);
+    scr_printf("ACTIVE %-55.55s   ",progress);
+    scr_setXY(0,18);
+    scr_printf("DETAIL %-55.55s   ",case_progress);
+    scr_setXY(0,20);
+    scr_printf("CORRECTNESS | PASS %3u | FAIL %3u      ",tests_ok,tests_failed);
+    scr_setXY(0,21);
+    if (first_failed) {
+        scr_setfontcolor(RED);
+        scr_printf("FIRST FAIL: %-48.48s     ",first_failed);
+    } else {
+        scr_setfontcolor(WHITE);
+        scr_printf("First failure: none                                          ");
+    }
+    scr_setXY(0,23);
+    scr_setfontcolor(finished ? (final_failures ? RED : GREEN) : WHITE);
+    if (finished)
+        scr_printf("RESULT: %s | failed groups %u | %u ranked families     ",
+                   final_failures ? "FAIL" : "PASS",final_failures,rank_state.count);
+    else
+        scr_printf("RESULT: RUNNING | %u benchmark families registered       ",rank_state.count);
+    scr_setXY(0,24);
+    scr_setfontcolor(WHITE);
+    scr_printf("%-54s","Detailed results: MMI_SUITE_* and MMI_* on stdout");
 }
+
 void ps2_bench_screen_init(void) {
     if (!initialized) { mmi_rank_reset(&rank_state); initialized = 1; }
     init_scr(); scr_setCursor(0); draw();
@@ -96,10 +141,14 @@ void ps2_bench_case(const char *name, unsigned current, unsigned total) {
         now - last_draw >= CLOCKS_PER_SEC / 4) {draw(); last_draw = now;}
 }
 void ps2_bench_screen_done(unsigned failed) {
-    progress = failed ? "DONE: FAIL (see log)" : "DONE: tested candidate ranking";
+    progress = failed ? "COMPLETE - FAIL" : "COMPLETE - PASS";
+    finished = 1;
+    final_failures = failed;
     for (unsigned i = 0; i < rank_state.count; ++i)
         mmi_rank_report(&rank_state.groups[i]);
-    draw(); scr_setfontcolor(failed ? RED : GREEN);
-    scr_printf("TEST: %s failures=%u\n", failed ? "FAIL!" : "OK", failed);
-    ps2_stress_show_error(); fflush(stdout); SleepThread();
+    draw();
+    printf("PS2 EE MMI RESULT: %s failures=%u\n",
+           failed ? "FAIL" : "PASS",failed);
+    fflush(stdout);
+    SleepThread();
 }
