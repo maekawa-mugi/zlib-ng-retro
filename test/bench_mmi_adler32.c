@@ -4,6 +4,7 @@
 #include "zbuild.h"
 #include "arch_functions.h"
 #include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include <time.h>
 #include "ps2/bench_display.h"
@@ -29,6 +30,71 @@ static clock_t bench(adler_func fn, const uint8_t *buf,
         return (clock_t)-1;
     return end - begin;
 }
+
+
+#ifdef PS2_SPR_BENCH
+/* Test placement for real EE MMI Adler32 checksum kernels.
+ * Input-only, so compare preloaded SPR against transfer-inclusive SPR. */
+static clock_t spr_median6_adler(const clock_t samples[6]) {
+    clock_t a[6],v; unsigned i,j;
+    for(i=0;i<6;i++)a[i]=samples[i];
+    for(i=1;i<6;i++){v=a[i];j=i;while(j&&a[j-1]>v){
+        a[j]=a[j-1];--j;}a[j]=v;}
+    return (a[2]+a[3])/2;
+}
+static int spr_bench_adler(void) {
+    static const size_t sizes[]={64,1024,8192,16368};
+    static const unsigned iter[]={30000,3000,600,200};
+    static const adler_func funcs[]={
+        adler32_mmi_prefix,adler32_mmi_formula
+    };
+    static const char *const names[]={"mmi_prefix","mmi_formula"};
+    static const char *const modes[]={"ram","spr_hot","spr_copy"};
+    uint8_t *spr=(uint8_t *)(uintptr_t)0x70000000u;
+    unsigned k,z,off,sample,step,mode,rep;
+    puts("ZLIB_SPR_ADLER_META,R5900,6samples,3placements");
+    for(k=0;k<2;k++)for(z=0;z<4;z++)for(off=0;off<2;off++) {
+        size_t size=sizes[z];
+        const uint8_t *p=source+off;
+        uint32_t expected=adler32_c(1u,p,size);
+        clock_t timings[3][6], med[3];
+        unsigned count=ps2_bench_iterations(iter[z]);
+        memcpy(spr+off,p,size);
+        for(mode=0;mode<3;mode++) {
+            const uint8_t *buf=mode?spr+off:p;
+            if(funcs[k](1u,buf,size)!=expected) {
+                printf("ZLIB_SPR_ADLER_FAIL,%s,%lu,%u,%s\n",
+                       names[k],(unsigned long)size,off,modes[mode]);
+                return 1;
+            }
+        }
+        for(sample=0;sample<6;sample++)for(step=0;step<3;step++) {
+            mode=(sample+step)%3;
+            if(mode==1)memcpy(spr+off,p,size);
+            clock_t begin=clock();
+            uint32_t value=0;
+            for(rep=0;rep<count;rep++) {
+                if(mode==2)memcpy(spr+off,p,size);
+                value^=funcs[k](1u,mode?spr+off:p,size)+rep;
+            }
+            clock_t end=clock();
+            sink^=value;
+            if(begin==(clock_t)-1||end==(clock_t)-1||end<=begin) {
+                puts("ZLIB_SPR_ADLER_FAIL,clock");return 1;
+            }
+            timings[mode][sample]=end-begin;
+        }
+        for(mode=0;mode<3;mode++) {
+            med[mode]=spr_median6_adler(timings[mode]);
+            printf("ZLIB_SPR_ADLER,%s,%lu,%u,%s,%ld,%.4f\n",
+                   names[k],(unsigned long)size,off,modes[mode],
+                   (long)med[mode],(double)med[0]/med[mode]);
+        }
+    }
+    puts("ZLIB_SPR_ADLER_RESULT,PASS,cases=16");
+    return 0;
+}
+#endif
 
 int main(void) {
     static const char *const names[] = {"generic", "prefix", "formula"};
@@ -88,6 +154,9 @@ int main(void) {
                    (double)tc / (double)tp, (double)tc / (double)tf);
         }
     }
+#ifdef PS2_SPR_BENCH
+    if (spr_bench_adler()) return 1;
+#endif
     printf("benchmark sink=%lu\n", (unsigned long)sink);
     return 0;
 }
