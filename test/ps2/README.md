@@ -2,6 +2,14 @@
 
 ## Expanded one-launch scratchpad experiment matrix
 
+The default QUICK mode includes all SPR correctness checks and timing
+with reduced repetition counts. Use the QUICK run first to avoid wasting
+real-hardware time; reserve --full for a confirmed stable build.
+A single final GS screen now reports representative RAM/SPR ratios for
+Chorba, Compare256, and Adler-32. Detailed input sizes are stdout-only.
+
+
+
 Chorba now has nine ranked candidates: the original six, spr_ring,
 spr_residue and spr_both. These isolate the 1024-byte scatter ring
 and 704-byte final residue in RAM or EE SPR, with the same CRC check.
