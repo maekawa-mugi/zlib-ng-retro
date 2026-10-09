@@ -48,30 +48,28 @@ DECL(bench, chorba);
 DECL(bench, chorba_copy);
 #endif
 
+/* Ordering is intentional: correctness of each family is reported next
+ * to its A/B benchmark, so the GS table fills in during the same run. */
 static const suite_entry entries[] = {
     ENTRY(test, slide_hash, 1),
+    ENTRY(bench, slide_hash, 0),
     ENTRY(test, compare256, 1),
+#ifdef MIPS_MMI_COMPARE64
+    ENTRY(bench, compare256, 0),
+#endif
     ENTRY(test, chunkset, 1),
+    ENTRY(bench, chunkset, 0),
     ENTRY(test, roundtrip, 1),
+    ENTRY(bench, roundtrip, 0),
     ENTRY(test, stress, 0),
     ENTRY(test, adler32_math, 1),
 #ifdef MIPS_MMI_ADLER32
     ENTRY(test, adler32, 0),
-#endif
-#ifdef MIPS_MMI_CHORBA
-    ENTRY(test, chorba, 0),
-#endif
-    ENTRY(bench, slide_hash, 0),
-    ENTRY(bench, chunkset, 0),
-    ENTRY(bench, roundtrip, 0),
-#ifdef MIPS_MMI_COMPARE64
-    ENTRY(bench, compare256, 0),
-#endif
-#ifdef MIPS_MMI_ADLER32
     ENTRY(bench, adler32, 0),
     ENTRY(bench, adler32_copy, 0),
 #endif
 #ifdef MIPS_MMI_CHORBA
+    ENTRY(test, chorba, 0),
     ENTRY(bench, chorba, 0),
     ENTRY(bench, chorba_copy, 0),
 #endif
@@ -79,10 +77,10 @@ static const suite_entry entries[] = {
 
 static void usage(const char *name) {
     printf("Usage: %s [--all|--tests|--benches|--smoke|--list|--only NAME] [--fail-fast]\n", name);
-    puts("  --integrated Validate inputs within benchmarks, plus stress and arithmetic tests");
+    puts("  --integrated Run correctness and checked benchmarks interleaved by family");
     puts("  --all       Run all standalone correctness tests and benchmarks");
 #ifdef PS2_BENCH_SCREEN
-    puts("  PS2 default: --all --quick (all correctness checks; 1/20 timing repetitions)");
+    puts("  PS2 default: --integrated --quick (all checks; 1/20 timing repetitions)");
     puts("  --full      Use original benchmark repetition counts");
     puts("  --quick     Use shorter benchmark repetition counts");
 #endif
@@ -216,7 +214,7 @@ int main(int argc, char **argv) {
 #endif
     features();
     printf("MMI_SUITE_COVERAGE,%s\n",
-           mode == INTEGRATED ? "integrated:exhaustive_compare+stress+math+bench_checks" :
+           mode == INTEGRATED ? "integrated:standalone_checks+checked_benchmarks" :
            mode == ALL ? "full:standalone+bench" :
            mode == TESTS ? "standalone_tests" :
            mode == BENCHES ? "bench_checks" : "selected_subset");
@@ -229,10 +227,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < count; ++i) {
         const suite_entry *item = &entries[i];
         int selected = mode == ALL ||
-            (mode == INTEGRATED && (strcmp(item->category, "bench") == 0 ||
-                strcmp(item->name, "test_stress") == 0 ||
-                strcmp(item->name, "test_compare256") == 0 ||
-                strcmp(item->name, "test_adler32_math") == 0)) ||
+            (mode == INTEGRATED) ||
             (mode == TESTS && strcmp(item->category, "test") == 0) ||
             (mode == BENCHES && strcmp(item->category, "bench") == 0) ||
             (mode == SMOKE && item->smoke) ||
