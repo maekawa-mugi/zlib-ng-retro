@@ -52,6 +52,13 @@ static void scalar_slide(Pos *array, uint32_t count, Pos wsize) {
     }
 }
 
+/* Explicit scalar C candidate. It is an independent oracle and is
+ * deliberately part of the timed competition, not just validation. */
+static void slide_hash_bench_c(deflate_state *s) {
+    Pos wsize = (Pos)s->w_size;
+    scalar_slide(s->head, HASH_SIZE, wsize);
+    scalar_slide(s->prev, wsize, wsize);
+}
 static int validate(deflate_state *s, slide_fn fn) {
     Pos wsize = (Pos)s->w_size;
     fill_tables(s);
@@ -82,18 +89,19 @@ static clock_t run(deflate_state *s, slide_fn fn, unsigned iterations) {
 }
 
 int main(void) {
-    static const char *const names[] = {"serial", "load2", "load4"};
+    static const char *const names[] = {"scalar", "serial", "load2", "load4"};
     static const slide_fn variants[] = {
-        slide_hash_mmi_serial, slide_hash_mmi_interleaved2, slide_hash_mmi_interleaved
+        slide_hash_bench_c, slide_hash_mmi_serial,
+        slide_hash_mmi_interleaved2, slide_hash_mmi_interleaved
     };
-    ps2_bench_candidates("slide_hash", names, 3, 1);
+    ps2_bench_candidates("slide_hash", names, 4, 1);
     static const unsigned offsets[] = {0, 1, 7};
     static const unsigned sizes[] = {1024, 32768};
     const unsigned iterations = ps2_bench_iterations(500);
 
     printf("MMI slide_hash A/B CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("wsize offset iterations serial_ticks load2_ticks load4_ticks");
+    puts("wsize offset iterations scalar_ticks serial_ticks load2_ticks load4_ticks");
     for (unsigned si = 0; si < sizeof(sizes)/sizeof(sizes[0]); ++si) {
         for (unsigned oi = 0; oi < sizeof(offsets)/sizeof(offsets[0]); ++oi) {
             ps2_bench_case("slide_hash cases", si * 3 + oi + 1, 6);
@@ -101,7 +109,7 @@ int main(void) {
             state.w_size = sizes[si];
             state.head = head + offset;
             state.prev = prev + offset;
-            for (unsigned v = 0; v < 3; ++v) {
+            for (unsigned v = 0; v < 4; ++v) {
                 int ok = validate(&state, variants[v]);
                 ps2_bench_check(v, ok);
                 if (!ok) {
@@ -110,18 +118,18 @@ int main(void) {
                     return 1;
                 }
             }
-            clock_t timings[3];
+            clock_t timings[4];
             if ((si + oi) & 1u) {
-                for (int v = 2; v >= 0; --v)
+                for (int v = 3; v >= 0; --v)
                     timings[v] = run(&state, variants[v], iterations);
             } else {
-                for (unsigned v = 0; v < 3; ++v)
+                for (unsigned v = 0; v < 4; ++v)
                     timings[v] = run(&state, variants[v], iterations);
             }
-            for (unsigned v = 0; v < 3; ++v) ps2_bench_ticks(v, timings[v]);
-            printf("%u %u %u %ld %ld %ld\n", sizes[si], offset,
+            for (unsigned v = 0; v < 4; ++v) ps2_bench_ticks(v, timings[v]);
+            printf("%u %u %u %ld %ld %ld %ld\n", sizes[si], offset,
                    iterations, (long)timings[0], (long)timings[1],
-                   (long)timings[2]);
+                   (long)timings[2], (long)timings[3]);
         }
     }
     printf("benchmark sink=%lu\n", (unsigned long)sink);
