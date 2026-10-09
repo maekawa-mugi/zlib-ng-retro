@@ -184,11 +184,13 @@ int main(void)
             printf("CRC_POLY_CASE,%s,%u,%s,PASS,ticks_per_call=%.3f,reps=%u\n",
                    size_labels[si],offset,candidate_names[v],ticks[v],reps);
         }
-        if(best<0){
+        /* Never report a fastest candidate when the reference braid
+         * clock is unresolved. Otherwise the speed ratio is meaningless. */
+        if(best<0 || ticks[0]<=0.0){
             printf("CRC_POLY_WINNER,%s,%u,UNDETERMINED\n",size_labels[si],offset);
             continue;
         }
-        double speed=ticks[best]>0? ticks[0]/ticks[best]:0.0;
+        double speed=ticks[0]/ticks[best];
         printf("CRC_POLY_WINNER,%s,%u,%s,%.5f\n",
                size_labels[si],offset,candidate_names[best],speed);
         ++winners;
