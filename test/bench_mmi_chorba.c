@@ -12,6 +12,7 @@
 #  error "Build with WITH_MMI_CHORBA=ON"
 #endif
 
+#define CHORBA_VARIANTS 6
 #define MAX_BENCH (1024u * 1024u)
 static uint8_t data[MAX_BENCH + 16] ALIGNED_(16);
 static volatile uint32_t keep_result;
