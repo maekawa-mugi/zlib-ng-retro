@@ -14,11 +14,13 @@
 uint32_t Z_INTERNAL compare256_mmi(const uint8_t *, const uint8_t *);
 uint32_t Z_INTERNAL compare256_mmi_plain(const uint8_t *, const uint8_t *);
 uint32_t Z_INTERNAL compare256_mmi_swar(const uint8_t *, const uint8_t *);
+uint32_t Z_INTERNAL compare256_mmi_hybrid16(const uint8_t *, const uint8_t *);
 #ifdef MIPS_MMI_COMPARE64
 uint32_t Z_INTERNAL compare256_mmi_prefilter64(const uint8_t *, const uint8_t *);
 uint32_t Z_INTERNAL compare256_mmi_prefilter32(const uint8_t *, const uint8_t *);
 uint32_t Z_INTERNAL compare256_mmi_prefilter32_swar(const uint8_t *, const uint8_t *);
 uint32_t Z_INTERNAL compare256_mmi_prefilter64_swar(const uint8_t *, const uint8_t *);
+uint32_t Z_INTERNAL compare256_mmi_hybrid16_pre64(const uint8_t *, const uint8_t *);
 #endif
 
 static uint8_t a[288] ALIGNED_(16);
