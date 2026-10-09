@@ -30,6 +30,89 @@ static clock_t run(compare_func compare, const uint8_t *x,
     return stop - start;
 }
 
+
+#ifdef PS2_SPR_BENCH
+/* Real MMI compare256 against two independent 256-byte inputs.
+ * Test both hot placement and the total cost of copying to SPR.
+ * Names are emitted to stdout, not the limited GS ranking table. */
+static clock_t spr_median6(const clock_t samples[6]) {
+    clock_t a[6], v; unsigned i,j;
+    for (i=0;i<6;i++)a[i]=samples[i];
+    for (i=1;i<6;i++){v=a[i];j=i;while(j && a[j-1]>v){
+        a[j]=a[j-1];--j;}a[j]=v;}
+    return (a[2]+a[3])/2;
+}
+static int compare_spr_bench(void) {
+    static const compare_func kernels[]={
+        compare256_mmi_plain,compare256_mmi_prefilter64_swar
+    };
+    static const char *const names[]={"plain","prefilter64_swar"};
+    static const char *const modes[]={
+        "ram","spr_a","spr_b","spr_both","spr_xfer"
+    };
+    static const unsigned mismatches[]={0,15,63,127,255,256};
+    static const unsigned offsets[]={0,1,15};
+    uint8_t *sa=(uint8_t *)(uintptr_t)0x70000000u;
+    uint8_t *sb=(uint8_t *)(uintptr_t)0x70000200u;
+    const unsigned iterations=ps2_bench_iterations(30000u);
+    unsigned k,oi,mi,v,rep,sample,step;
+    printf("ZLIB_SPR_COMPARE_META,R5900,plain_and_prefilter64_swar,6samples\n");
+    for(k=0;k<2;k++)for(oi=0;oi<3;oi++)for(mi=0;mi<6;mi++){
+        const unsigned off=offsets[oi], mismatch=mismatches[mi];
+        const uint8_t *ax=a+off, *bx=b+off;
+        clock_t ticks[5][6],med[5];
+        uint32_t want;
+        for(unsigned i=0;i<256;i++){a[off+i]=b[off+i]=(uint8_t)(i*57u+13u);}
+        if(mismatch<256)b[off+mismatch]^=0x80u;
+        want=compare256_c(ax,bx);
+        if(want!=mismatch)return 1;
+        for(v=0;v<5;v++){
+            const uint8_t *x=(v==1||v==3)?sa+off:ax;
+            const uint8_t *y=(v==2||v==3)?sb+off:bx;
+            if(v==1||v==3)memcpy(sa+off,ax,256);
+            if(v==2||v==3)memcpy(sb+off,bx,256);
+            if(v==4){memcpy(sa+off,ax,256);memcpy(sb+off,bx,256);x=sa+off;y=sb+off;}
+            if(kernels[k](x,y)!=want){
+                printf("ZLIB_SPR_COMPARE_FAIL,%s,off%u,diff%u,%s\n",
+                       names[k],off,mismatch,modes[v]);
+                return 1;
+            }
+        }
+        for(sample=0;sample<6;sample++)for(step=0;step<5;step++){
+            const unsigned mode=(sample+step)%5;
+            const uint8_t *x=(mode==1||mode==3)?sa+off:ax;
+            const uint8_t *y=(mode==2||mode==3)?sb+off:bx;
+            clock_t begin,end;
+            if(mode==1||mode==3)memcpy(sa+off,ax,256);
+            if(mode==2||mode==3)memcpy(sb+off,bx,256);
+            begin=clock();
+            uint32_t result=0;
+            for(rep=0;rep<iterations;rep++){
+                if(mode==4) {
+                    memcpy(sa+off,ax,256);
+                    memcpy(sb+off,bx,256);
+                    result+=kernels[k](sa+off,sb+off);
+                }else result+=kernels[k](x,y);
+            }
+            end=clock();
+            sink^=result;
+            if(begin==(clock_t)-1||end==(clock_t)-1||end<=begin){
+                puts("ZLIB_SPR_COMPARE_FAIL,clock");return 1;
+            }
+            ticks[mode][sample]=end-begin;
+        }
+        for(v=0;v<5;v++){
+            med[v]=spr_median6(ticks[v]);
+            printf("ZLIB_SPR_COMPARE,%s,off%u,diff%u,%s,%ld,%.4f\n",
+                   names[k],off,mismatch,modes[v],(long)med[v],
+                   med[v]>0?(double)med[0]/med[v]:0.0);
+        }
+    }
+    puts("ZLIB_SPR_COMPARE_RESULT,PASS,cases=36");
+    return 0;
+}
+#endif
+
 int main(void) {
     static const char *const names[] = {
         "generic", "16-byte", "16-swar", "32-byte", "32-swar", "64-byte", "64-swar"
@@ -93,6 +176,9 @@ int main(void) {
                 y[mismatch] ^= 0x80u;
         }
     }
+#ifdef PS2_SPR_BENCH
+    if (compare_spr_bench()) return 1;
+#endif
     printf("benchmark sink=%lu\n", (unsigned long)sink);
     return 0;
 }
