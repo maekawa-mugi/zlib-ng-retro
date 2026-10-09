@@ -45,6 +45,22 @@ int mmi_rank_winner(const mmi_rank_group *g) {
     }
     return best;
 }
+/* Only this precise case is compared. Aggregate weights are intentionally
+ * ignored: a 64-byte copy must not get drowned out by a 1KiB copy. */
+int mmi_rank_case_winner(const mmi_rank_group *g,
+                         const clock_t ticks[MMI_RANK_VARIANTS])
+{
+    int best=-1;
+    unsigned i;
+    if (!g->competitive || g->count<2) return -1;
+    for(i=0;i<g->count;++i) {
+        const mmi_rank_variant *v=&g->v[i];
+        if(!v->checks || v->failures || ticks[i]<=0 ||
+           ticks[i]==(clock_t)-1) return -1;
+        if(best<0 || ticks[i]<ticks[best]) best=(int)i;
+    }
+    return best;
+}
 void mmi_rank_report(const mmi_rank_group *g) {
     const int best = mmi_rank_winner(g);
     for (unsigned i = 0; i < g->count; ++i) {
