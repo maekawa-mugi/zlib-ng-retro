@@ -33,6 +33,10 @@ Z_INTERNAL uint32_t adler32_c(uint32_t adler, const uint8_t *buf, size_t len) {
         adler32_copy_align(&adler, NULL, buf, align_diff, &sum2, 7, 0);
         buf += align_diff;
         len -= align_diff;
+        /* Alignment bytes are outside the following NMAX block. Reduce
+         * here so that no unreduced accumulation can exceed NMAX bytes. */
+        adler %= BASE;
+        sum2 %= BASE;
     }
 
     /* do length NMAX blocks -- requires just one modulo operation */

@@ -1,0 +1,31 @@
+name: EE MMI host-side validation
+on:
+  pull_request:
+    paths:
+      - "arch/mips/**"
+      - "test/**"
+      - ".github/workflows/ee-mmi-host.yml"
+  workflow_dispatch:
+
+jobs:
+  host-models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check one-trip scripts and Python syntax
+        run: |
+          sh -n test/ee-build-matrix.sh
+          sh -n test/ee-run-matrix.sh
+          python3 -m py_compile test/ee-summarize-results.py
+      - name: Exhaustive host Adler-32 recurrence/formula tests
+        run: |
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+            -o /tmp/test_mmi_adler_math test/test_mmi_adler32_math.c
+          /tmp/test_mmi_adler_math
+      - name: CRC32 Chorba polynomial and inverse-model tests
+        run: python3 test/gen_mmi_chorba.py
+      - name: Check generic host CMake build still works
+        run: |
+          cmake -S . -B build-host -DWITH_GTEST=OFF \
+            -DBUILD_TESTING=OFF -DWITH_MMI=OFF
+          cmake --build build-host --target zlib-ng

@@ -462,6 +462,56 @@ macro(check_vpclmulqdq_intrinsics)
     endif()
 endmacro()
 
+# Check the actual EE assembler instructions instead of assuming MSA support.
+# The target toolchain must supply any R5900-specific CPU/ABI flags.
+macro(check_mmi_asm)
+    check_c_source_compiles([=[
+        int main(void) {
+            unsigned int data[4] __attribute__((aligned(16))) = {0};
+            __asm__ __volatile__(
+                "lq $8, 0(%0)\\n\\t"
+                "psubuh $8, $8, $8\\n\\t"
+                "pxor $8, $8, $8\\n\\t"
+                "sq $8, 0(%0)"
+                : : "r"(data) : "$8", "memory");
+            return 0;
+        }
+    ]=] HAVE_MMI_ASM)
+endmacro()
+
+# POR is only required by the optional 64-byte MMI comparison prefilter.
+macro(check_mmi_por_asm)
+    check_c_source_compiles([=[
+        int main(void) {
+            unsigned int bytes[4] __attribute__((aligned(16))) = {0};
+            __asm__ __volatile__(
+                "lq $8, 0(%0)\\n\\t"
+                "por $8, $8, $8\\n\\t"
+                "sq $8, 0(%0)"
+                : : "r"(bytes) : "$8", "memory");
+            return 0;
+        }
+    ]=] HAVE_MMI_POR_ASM)
+endmacro()
+
+# Additional packed operations used by the opt-in EE Adler-32 routine.
+macro(check_mmi_adler_asm)
+    check_c_source_compiles([=[
+        int main(void) {
+            unsigned int bytes[4] __attribute__((aligned(16))) = {0};
+            unsigned short sum[8] __attribute__((aligned(16)));
+            __asm__ __volatile__(
+                "lq $8, 0(%0)\\n\\t"
+                "pextlb $9, $0, $8\\n\\t"
+                "pextub $10, $0, $8\\n\\t"
+                "paddh $9, $9, $10\\n\\t"
+                "sq $9, 0(%1)"
+                : : "r"(bytes), "r"(sum) : "$8", "$9", "$10", "memory");
+            return sum[0];
+        }
+    ]=] HAVE_MMI_ADLER_ASM)
+endmacro()
+
 macro(check_msa_intrinsics)
     # Check if compiler supports MSA
     set(CMAKE_REQUIRED_FLAGS "-mmsa -mhard-float -mfp64 -mnan=2008")

@@ -1,0 +1,480 @@
+# PlayStation 2 Emotion Engine MMI (experimental)
+
+This branch adds opt-in R5900 MMI acceleration to **deflate hash-table
+sliding, match comparison, and selected inflate history copies**, using
+128-bit `LQ`, `SQ`, `PSUBUH`, and `PXOR` instructions. This is not MIPS
+MSA, and must never be enabled for generic MIPS CPUs.
+
+## Scope
+
+- `slide_hash_mmi`: update both `head` and `prev` hash chains.
+- `slide_hash_head_mmi`: update `head` only.
+- Each MMI operation handles eight 16-bit `Pos` values in parallel using
+  unsigned saturating subtraction.
+- Misaligned prefixes and tails use scalar operations. All `LQ`/`SQ`
+  accesses are 16-byte-aligned, since EE silently masks low address bits.
+- `compare256_mmi`: use aligned MMI `LQ`/`PXOR` to find the first mismatched
+  byte, with safe scalar paths for incompatible input alignments.
+- MMI-backed `longest_match` variants use the same comparison routine.
+- Optional `WITH_MMI_COMPARE64=ON` adds a 64-byte equality prefilter using
+  `PXOR` and `POR`. A mismatch reuses the original 16-byte path to find
+  its first position. This is OFF by default until real EE benchmarks.
+- `chunkmemset_safe_mmi`: MMI 128-bit LZ77 history copying for aligned
+  source/destination addresses and distance >= 16; generic C fallback for
+  short-distance, differently aligned, or backward-overlapping copies.
+- Experimental `adler32_mmi` and `adler32_copy_mmi` are available with
+  `WITH_MMI_ADLER32=ON` (OFF by default). They combine MMI byte-to-halfword
+  expansion and packed addition with exact scalar weighted sums, without
+  PMADDH or implicit HI/LO changes. Benchmark before enabling in production.
+- Optional `WITH_MMI_CHORBA=ON` enables `crc32_chorba_mmi` and
+  `crc32_copy_chorba_mmi`. It is a **non-destructive** 128-bit Chorba
+  implementation using `LQ/PXOR/SQ` to apply the paper's degree-44
+  zero polynomial scaled by 128 over GF(2). The ring buffer is 1024
+  bytes, the final remainder is 704 bytes, and a precomputed inverse
+  CRC shift matrix restores the original CRC-32. Short buffers use
+  `crc32_braid`; this experiment is OFF by default until PS2 testing.
+- The generic
+  `inflate_fast` loop is unchanged; only calls through
+  `chunkmemset_safe` are redirected to the new conditional copy path.
+- `compare256_mmi` uses the MMI fast path only if both input addresses
+  are 16-byte aligned. Inputs with different alignment residues use
+  64-bit endian-independent SWAR comparison, not unsafe unaligned `LQ`.
+- MMI copy loads/stores are strictly interleaved to preserve the behavior
+  of 16-byte-distance overlapping LZ77 history copies.
+
+**Status:** source and build integration added; no PS2 hardware test or
+R5900 cross-build has been run by the author of these commits.
+
+## CMake cross-build
+
+For a single PS2/PCSX2 ELF with on-screen results, see
+[`test/ps2/README.md`](../../test/ps2/README.md). The supplied
+`cmake/toolchain-ps2-ee.cmake` supports modern PS2DEV/PS2SDK installations.
+
+Use an EE-specific toolchain file. The file's name and CPU/ABI flags depend
+on your installed PS2 SDK/toolchain:
+
+```sh
+cmake -S . -B build-ee \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DWITH_GTEST=OFF \
+  -DBUILD_TESTING=ON \
+  -DZLIB_COMPAT=ON
+
+cmake --build build-ee --target zlib-ng test_mmi_slide_hash test_mmi_compare256 test_mmi_chunkset test_mmi_roundtrip
+
+# Optional experimental checksum, built separately for A/B testing:
+cmake -S . -B build-ee-adler \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_ADLER32=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+cmake --build build-ee-adler --target test_mmi_adler32 bench_mmi_adler32
+
+# Optional 64-byte compare prefilter (benchmark on EE before adopting):
+cmake -S . -B build-ee-compare64 \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+cmake --build build-ee-compare64 --target test_mmi_compare256 bench_mmi_compare256
+```
+
+`WITH_MMI` is OFF by default. When enabled, CMake requires a working
+assembler probe for `LQ`, `PSUBUH` and `SQ`, disables MSA, and selects
+compile-time native dispatch rather than Linux HWCAP runtime detection.
+If the probe fails, ensure your compiler is targeting the R5900, and for
+cross compilation consider `-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`
+when the compiler test cannot link without an SDK startup/runtime.
+
+The four standard test programs (and optional Adler-32 test) are **EE executables**, not host
+executables. Run them on actual PS2 hardware using your usual ELF loader.
+Successful output is:
+
+```text
+MMI slide_hash: PASS
+MMI compare256: PASS
+MMI chunkmemset_safe: PASS
+MMI roundtrip: PASS
+# With WITH_MMI_ADLER32=ON:
+MMI Adler-32: PASS
+```
+
+- `test_mmi_slide_hash` compares aligned and unaligned hash arrays with a
+  scalar reference, verifies out-of-range sentinels, and checks the head-only
+  update path separately.
+- `test_mmi_compare256` checks differing source/destination alignments,
+  all 256 mismatch indices, equal inputs, and final-byte boundaries.
+- `test_mmi_chunkset` checks overlapping forward copies, short distances,
+  backwards/forward sources, all sixteen alignment offsets, truncated
+  output space, and sentinel bytes outside the copied span.
+- `test_mmi_roundtrip` compresses and decompresses four kinds of input
+  patterns at levels 1/6/9, including buffers much larger than 32KB.
+  It detects incorrect decoded bytes, lengths, and error statuses.
+- Optional `test_mmi_adler32` checks checksum and copy equivalence to
+  `adler32_c` over many lengths, alignments, patterns and incremental chunks.
+
+For performance testing, compare a normal `WITH_MMI=ON` build to an EE
+baseline using `WITH_MMI=OFF` with otherwise identical build flags.
+Aligned fast paths may be slower for some small inputs, so measure complete
+inflate/deflate streams before drawing conclusions.
+
+For ordinary builds that should not use MMI, omit `-DWITH_MMI=ON`.
+For an EE baseline without MMI, build the same target with
+`-DWITH_MMI=OFF -DWITH_MSA=OFF` and
+`-DWITH_RUNTIME_CPU_DETECTION=OFF`.
+
+## Autoconf-style configure script
+
+If your EE toolchain can drive the project's existing configure script,
+the experimental option is:
+
+```sh
+CC=/path/to/ee-gcc ./configure --with-mmi --static
+make
+```
+
+The script also checks for MMI assembly instructions. It does not use
+Linux MSA/HWCAP probing, and it disables runtime CPU detection for the
+EE configuration. Platform-specific static-link and runtime settings
+remain the responsibility of the PS2 toolchain integration.
+
+## Suggested validation
+
+1. First run the three `test_mmi_*` executables on hardware. Capture any
+   assembler error, crash, or mismatch with its reported test parameters.
+2. Run full compress/decompress round trips with levels 1, 6, and 9, with
+   incompressible, repetitive, and near-32KB-window inputs. Compare decoded
+   bytes against the unmodified zlib reference implementation.
+3. Compare compressed output sizes and throughput against a no-MMI EE build.
+   Measure whole-stream times, not just the vector loop.
+4. Validate with both `-O2` and `-O3`. Confirm compressed streams decode
+   correctly with an independent zlib implementation as well.
+
+Please report toolchain version, compiler flags, MMI test output, and any
+observed difference from the generic EE baseline.
+
+## Important caveats
+
+- This is a fixed R5900 target. It does **not** probe generic MIPS at runtime.
+- The 128-bit MMI instructions operate on EE GPRs, not MIPS MSA registers.
+- The fast paths rely on the compiler honouring GNU inline-assembly register
+  clobbers for `$8` and `$9` and on the target toolchain's ABI.
+- The tests are intended for execution on PS2, not QEMU's generic MIPS CPU.
+- The experimental compare/copy fast paths have not yet been compiled with
+  an R5900 toolchain or executed on an EE by the implementer. The available
+  host Clang does not recognize `-march=r5900`; there is no EE cross-compiler
+  installed in this environment.
+- `BUILD_SHARED_LIBS=OFF` is recommended for PS2.
+
+## Experimental Adler-32 throughput measurement
+
+Build with `WITH_MMI_ADLER32=ON`, then execute `bench_mmi_adler32`
+on a PS2. It compares native `adler32_mmi` with `adler32_c` at
+64B, 1KB, 8KB and 64KB sizes, both aligned and offset-by-one.
+The ratio is `C_ticks / MMI_ticks`; values above 1 suggest the MMI
+candidate is faster. `clock()` on EE toolchains may have coarse or
+unsupported timing: if it reports zero or unavailable ticks, use an
+EE-specific hardware cycle counter instead. This executable is not
+registered with CTest.
+
+## Optional 64-byte comparison benchmark
+
+Configure with `WITH_MMI=ON -DWITH_MMI_COMPARE64=ON` and build
+`test_mmi_compare256` and `bench_mmi_compare256`.
+Run the executable on EE hardware. The normal 256-byte regression test
+checks every mismatch offset and all input alignment residues; the benchmark
+also compares the optional 64-byte prefilter against generic C at different
+match lengths and offsets. Its ratio is generic ticks divided by MMI ticks.
+Both `WITH_MMI_COMPARE64` and `WITH_MMI_ADLER32` remain OFF by default.
+
+## Architecture-independent Adler-32 math test
+
+The weighted-sum helper is pure C, and its arithmetic is testable on a
+normal workstation even if the EE cross compiler is not installed:
+
+```sh
+cc -std=c11 -O2 -Wall -Wextra -Werror \
+  -o test_mmi_adler32_math test/test_mmi_adler32_math.c
+./test_mmi_adler32_math
+```
+
+This test checks the scalar model of MMI's halfword pairs, modulo bounds,
+input alignment and streaming split behavior. Passing it does **not**
+validate the actual EE instructions; those still require PS2 execution.
+
+## Experimental MMI Chorba CRC-32
+
+Paper: Sam Russell, *Chorba: A novel CRC32 implementation*
+(https://arxiv.org/abs/2412.16398), specifically the degree-44
+`chorba_352` zero polynomial, scaled by 128 so that each XOR
+offset falls on a 16-byte EE GPR boundary.
+
+The chronological XOR taps (in bytes) are:
+`16, 48, 112, 144, 192, 208, 448, 592, 624, 704`.
+These are the exponents **in ascending order** multiplied by 16.
+For reflected CRC-32, using `(44 - exponent) * 16` would be wrong.
+The 704-byte zero-input reverse shift uses a precomputed 32-column
+GF(2) matrix. The public CRC seed is XOR-folded into the first four
+bytes, and the input buffer is never modified.
+
+```sh
+cmake -S . -B build-ee-chorba \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_CHORBA=ON -DWITH_CRC32_CHORBA=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+cmake --build build-ee-chorba --target zlib-ng test_mmi_chorba test_mmi_roundtrip bench_mmi_chorba
+```
+
+Run `test_mmi_chorba` on the PS2. Expected: `MMI Chorba: PASS`.
+It compares native MMI against generic braid for different sizes,
+input alignments, CRC seeds, repeated patterns, copy variants, and
+streaming splits. Compare large-buffer throughput on actual EE
+hardware before enabling this globally. The 1024-byte ring traffic
+and 704-byte finalization can make small inputs slower than braid.
+
+The polynomial and inverse shift constants can be reproduced independently
+on a host computer (Python standard library only):
+
+```sh
+python3 test/gen_mmi_chorba.py
+```
+
+The script verifies the degree-44 reciprocal CRC polynomial, its
+power-of-two scaling to 128-bit lanes, the inverse shift matrix and a
+reference emulation against Python's standard CRC32. Hardware correctness
+still requires `test_mmi_chorba` on a PS2. Run `bench_mmi_chorba` for
+an initial braid-vs-MMI throughput comparison; results are subject to the
+toolchain's `clock()` resolution. In particular, the MMI algorithm's
+scratch-ring traffic may outweigh its XOR throughput benefit.
+
+
+## Same-build A/B experiments: compare256 and slide_hash
+
+Both implementations are kept in one MMI build so that hardware tests can
+run identical inputs through each variant. Neither experimental alternative
+is enabled by default in production dispatch.
+
+- `test_mmi_slide_hash` now checks production, serial and interleaved
+  schedules (full and head-only) against the scalar reference, including
+  misaligned table addresses and sentinel values.
+- `bench_mmi_slide_hash` runs serial and interleaved code on the same EE
+  executable. It prints `serial_ticks / interleaved_ticks`; values above
+  1 suggest the interleaved schedule is faster.
+- `test_mmi_compare256` checks the plain 16-byte routine and, when built
+  with `WITH_MMI_COMPARE64=ON`, the 64-byte POR prefilter at each tested
+  mismatch position and address alignment.
+- `bench_mmi_compare256`, available with `WITH_MMI_COMPARE64=ON`,
+  now prints generic C, plain16 and prefilter64 timings side by side.
+
+```sh
+cmake -S . -B build-ee-ab \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+
+cmake --build build-ee-ab --target \
+  test_mmi_slide_hash test_mmi_compare256 \
+  bench_mmi_slide_hash bench_mmi_compare256 test_mmi_roundtrip
+
+# Execute the resulting EE binaries on a real PS2 Linux system.
+```
+
+To select the interleaved slide_hash schedule for the normal library, set
+`-DWITH_MMI_SLIDE_HASH_INTERLEAVED=ON`. With that option OFF, the original
+serial schedule remains the production implementation. Both routines are
+still available to the tests and benchmark regardless of that setting.
+`WITH_MMI_COMPARE64=ON` continues to choose the 64-byte prefilter for
+production comparison, while its test executable checks both variants.
+
+Use multiple benchmark runs, rotate ordering and compare whole-stream
+throughput with the same toolchain/flags. `clock()` may be coarse or
+unavailable on EE, so these ticks are exploratory, not hardware proof of
+a speedup. The interleaved code and the dual-variant tests have not been
+cross-compiled or executed on a PS2 by this change.
+
+
+## Additional A/B kernels (LZ77, CRC32 Chorba, Adler-32 copy)
+
+The following implementations are linked side by side when their parent MMI
+feature is built, even if the experimental production switch remains OFF.
+
+| Kernel | Baseline | Candidate | Dispatch switch (default OFF) |
+| --- | --- | --- | --- |
+| LZ77 `chunkmemset_safe_mmi` | Serial LQ/SQ | Four loads then four stores, only if distance >=64 | `WITH_MMI_CHUNKSET_BURST` |
+| `crc32_chorba_mmi` | One tap per MMI XOR operation | Paired tap writes keeping value in a GPR | `WITH_MMI_CHORBA_PAIRED_TAPS` |
+| `adler32_copy_mmi` | MMI checksum followed by memcpy | One-pass checksum and MMI copy for aligned output | `WITH_MMI_ADLER32_FUSED_COPY` |
+
+The burst LZ77 kernel **must not** load four blocks in advance if the
+distance is under 64 bytes, because newly written bytes would be needed
+as later input. For those distances, the candidate always uses the
+original sequential LQ/SQ order. Misaligned and forward-source cases
+still use the generic fallback.
+
+The paired Chorba scatter uses the same ten offsets and does not alter
+CRC polynomial arithmetic. Its speed depends on R5900 load latency and
+GPR pressure. It is only available if `WITH_MMI_CHORBA=ON`.
+
+The fused Adler copy has the same non-overlap contract as `memcpy`.
+The 128-bit store is performed only when the destination is 16-byte
+aligned; a safe ordinary byte copy handles other destination alignments.
+It is only available if `WITH_MMI_ADLER32=ON`.
+
+Build all additional A/B runners:
+
+```sh
+cmake -S . -B build-ee-extended \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/your/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DWITH_MMI_ADLER32=ON -DWITH_MMI_CHORBA=ON \
+  -DWITH_CRC32_CHORBA=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+
+cmake --build build-ee-extended --target \
+  test_mmi_chunkset test_mmi_chorba test_mmi_adler32 test_mmi_roundtrip \
+  bench_mmi_chunkset bench_mmi_chorba bench_mmi_adler32_copy \
+  bench_mmi_slide_hash bench_mmi_compare256
+```
+
+Run the executables on actual PS2 hardware. The correctness tests now call
+the selected dispatch **and both alternatives** directly. When benchmarking,
+compare identical data and multiple runs; `clock()` on PS2 Linux may be
+coarse and is not a substitute for EE performance counters. The changes
+are experimental and have not been cross-built or measured on hardware
+by their implementer.
+
+
+## Adler-32 weighted-sum A/B and full-stream benchmark
+
+The scalar weighting of MMI halfword pairs now has two mathematically
+equivalent forms:
+
+- `adler32_mmi_prefix` computes a running 8-lane prefix sum (the baseline).
+- `adler32_mmi_formula` uses explicit coefficients `8,7,6,5,4,3,2,1`
+  and an unrolled sum of the first eight input bytes.
+
+`WITH_MMI_ADLER32_FORMULA=ON` selects the latter in normal checksum
+dispatch; OFF remains the original behavior. `test_mmi_adler32` and the
+host-runnable `test_mmi_adler32_math` check both against an independent
+bytewise implementation. `bench_mmi_adler32` prints generic C, prefix,
+and formula timings on the same hardware.
+
+`bench_mmi_roundtrip` checks and measures whole-stream compress/decompress
+at levels 1, 6, 9, using incompressible, repetitive, zero and mixed
+inputs (4 KiB, 64 KiB, 256 KiB). The timings include library invocation
+and full deflate/inflate work, not just a microkernel. The printed compressed
+sizes allow cross-build ratio comparisons. For useful performance decisions,
+run identical builds differing in only one `WITH_MMI_*` flag:
+
+```sh
+cmake --build build-ee-extended --target \
+  test_mmi_adler32 bench_mmi_adler32 test_mmi_roundtrip bench_mmi_roundtrip
+# Run the four resulting binaries on PS2 Linux.
+```
+
+**Important:** these source changes were not compiled with an R5900
+toolchain or executed on PS2 hardware by the contributor of this PR.
+Do not enable experimental production flags merely because generic
+host-side arithmetic tests pass.
+
+
+## Additional experimental compare and CRC-copy paths
+
+### compare256 64-bit first-difference search
+
+`WITH_MMI_COMPARE_SWAR=ON` switches the mismatch-location search after
+a 16-byte LQ/PXOR comparison from the original bytewise loop to the
+endianness-aware `zng_first_diff_byte64()` primitive. This reuses the two
+64-bit words already read for the all-equal check and searches the first
+nonzero half. It does not change the unaligned pointer fallback.
+
+The 64-byte prefilter (`WITH_MMI_COMPARE64`) and the SWAR locator are
+**independent toggles**; both remain OFF by default. The test compares
+four combinations on a single binary when prefilter64 is enabled.
+`test_mmi_compare256` now runs all 257 first-mismatch positions, including
+equal inputs, for all 16x16 source alignment residues: 65,792 cases
+per strategy. `bench_mmi_compare256` times generic C and the four
+MMI strategies on identical hardware.
+
+### Chorba CRC32 fused copy
+
+`WITH_MMI_CHORBA_FUSED_COPY=ON` switches the regular
+`crc32_copy_chorba_mmi` dispatch to an experimental fused copy.
+The original `crc32_copy_chorba_mmi_twopass` remains available.
+
+The fused routine copies the *original* source bytes while applying CRC
+polynomial taps. For 16-byte-aligned destinations after prefix peeling,
+the source input quadword is SQ-stored to the output before applying PXOR.
+The first block must instead be copied from the original source because
+Chorba has already folded the CRC seed into its temporary first vector.
+Unaligned destinations and small-input braid fallbacks use a safe
+ordinary copy. The function retains the same non-overlapping `memcpy`
+contract as the baseline.
+
+`test_mmi_chorba` checks production, two-pass, and fused variants with
+the original braid CRC, including different source/destination alignments,
+sentinel bytes and input preservation. The new
+`bench_mmi_chorba_copy` compares both paths directly.
+
+### Suggested EE build
+
+```sh
+cmake -S . -B build-ee-more \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/ee-toolchain.cmake \
+  -DWITH_MMI=ON -DWITH_MMI_COMPARE64=ON \
+  -DWITH_MMI_ADLER32=ON \
+  -DWITH_MMI_CHORBA=ON -DWITH_CRC32_CHORBA=ON \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+
+cmake --build build-ee-more --target \
+  test_mmi_compare256 bench_mmi_compare256 \
+  test_mmi_chorba bench_mmi_chorba_copy \
+  test_mmi_roundtrip bench_mmi_roundtrip
+```
+
+These new dispatch toggles must be benchmarked on real PS2 Linux before
+production use. Passing host-only arithmetic models does not constitute
+MMI instruction correctness or timing validation.
+
+
+## Single-ELF PS2 Linux verification and one-transfer A/B matrix
+
+See **[the one-transfer verification kit](../../test/EE_ONE_TRIP.md)**.
+`test/mmi_suite.c` integrates the standalone native correctness tests,
+randomized stress, and available A/B benchmarks into one EE executable.
+Use `mmi_suite --all`, `--tests`, `--benches`, `--smoke`, `--list`,
+or `--only NAME`. Each entry generates `MMI_SUITE_RESULT` lines that
+identify its status independently.
+
+New opt-in `WITH_MMI_CHUNKSET_PATTERN=ON` adds an additional safe
+short-distance LZ77 reconstruction candidate for distances 1, 2, 4, or
+8, using a 16-byte periodic MMI LQ/SQ fill after scalar alignment.
+The existing generic, serial and distance-safe burst options remain.
+`test_mmi_chunkset` and `bench_mmi_chunkset` compare all four methods.
+
+On the build PC, `sh test/ee-build-matrix.sh /absolute/path/to/toolchain.cmake`
+produces ten distinct EE ELF variants in one transfer directory. On PS2
+Linux, `sh run-all.sh --tests` and `sh run-all.sh --benches` write
+separate per-variant logs. After copying logs back, run
+`python3 test/ee-summarize-results.py /path/to/bundle` for whole-stream
+performance ratios. Neither the scripts nor mathematical host CI can
+replace an R5900 cross-build and real PS2 execution.
+
+
+## Chorba CRC32 crossover size A/B
+
+The code also tests independent size thresholds `1024`, `4096`, and
+`8192` bytes for the same non-destructive Chorba algorithm. Configure
+the normal CRC32 dispatch with
+`-DWITH_MMI_CHORBA_THRESHOLD=1024|4096|8192` (default `4096`).
+This setting requires `WITH_MMI_CHORBA=ON` to affect the kernel.
+
+`test_mmi_chorba` validates all three thresholds against `crc32_braid`,
+including 1023/1024/1025, 4095/4096/4097, and 8191/8192/8193
+boundaries, seeds, alignments and streaming. `bench_mmi_chorba` times
+all three along with the single- and paired-tap schedules.
+`test/gen_mmi_chorba.py` independently tests their reference arithmetic
+on a host. The one-transfer matrix includes the additional
+`chorba_threshold_1024` and `chorba_threshold_8192` EE builds, for
+a total of **12** variant binaries. The default remains 4096 until
+real PS2 timing data shows a better crossover.

@@ -11,4 +11,14 @@
 #  endif
 #endif
 
+/* MMI is an explicitly chosen fixed-CPU target; there is no MSA-style
+ * runtime capability probe for PlayStation 2 EE. */
+#if defined(MIPS_MMI) && defined(DISABLE_RUNTIME_CPU_DETECTION)
+#  define MIPS_MMI_NATIVE
+#endif
+
+#if defined(MIPS_MMI_NATIVE) && defined(MIPS_MMI_ADLER32)
+#  define MIPS_MMI_ADLER32_NATIVE
+#endif
+
 #endif /* MIPS_NATIVES_H_ */
