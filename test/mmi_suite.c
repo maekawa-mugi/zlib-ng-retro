@@ -46,6 +46,7 @@ DECL(bench, adler32_copy);
 DECL(test, chorba);
 DECL(bench, chorba);
 DECL(bench, chorba_copy);
+DECL(bench, crc_poly);
 #endif
 
 /* Ordering is intentional: correctness of each family is reported next
@@ -72,6 +73,7 @@ static const suite_entry entries[] = {
     ENTRY(test, chorba, 0),
     ENTRY(bench, chorba, 0),
     ENTRY(bench, chorba_copy, 0),
+    ENTRY(bench, crc_poly, 0),
 #endif
 };
 
@@ -151,6 +153,7 @@ static void features(void) {
 #endif
 #ifdef MIPS_MMI_CHORBA
     puts("MMI_SUITE_FEATURE,chorba,ON");
+    puts("MMI_SUITE_FEATURE,crc_polynomial_lab,ON");
 #else
     puts("MMI_SUITE_FEATURE,chorba,OFF");
 #endif
