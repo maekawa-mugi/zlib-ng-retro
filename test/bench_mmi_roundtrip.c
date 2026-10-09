@@ -53,6 +53,7 @@ int main(void) {
     z_uintmax_t capacity = PREFIX(compressBound)(MAX_BENCH);
     uint8_t *packed = malloc((size_t)capacity);
     int outcome = 0;
+    unsigned valid_cases=0, invalid_cases=0;
     ps2_bench_candidates("roundtrip", names, 2, 0);
     if (!packed) {
         ps2_bench_check(0, 0);
@@ -145,12 +146,14 @@ int main(void) {
                 if (med_c<=0.0 || med_d<=0.0) {
                     ps2_bench_ticks(0,(clock_t)-1);
                     ps2_bench_ticks(1,(clock_t)-1);
+                    ++invalid_cases;
                     printf("RT_INVALID,%u,%d,%lu,clock_unavailable_or_coarse\n",
                            pattern,level,(unsigned long)len);
                     /* Timer invalid is not proof of a performance gain.
                      * Correctness is still independently verified. */
                     continue;
                 }
+                ++valid_cases;
                 rate_c=ps2_roundtrip_mb_s(len,count,med_c);
                 rate_d=ps2_roundtrip_mb_s(len,count,med_d);
                 ps2_bench_ticks(0,(clock_t)med_c);
@@ -164,8 +167,9 @@ int main(void) {
             }
         }
     }
-    printf("RT_RESULT,%s,36 cases,checksum=%lu\n",
-           outcome ? "FAIL":"PASS",(unsigned long)sink);
+    printf("RT_RESULT,%s,valid=%u,invalid=%u,expected=36,checksum=%lu\n",
+           outcome?"FAIL":invalid_cases?"PARTIAL":"PASS",
+           valid_cases,invalid_cases,(unsigned long)sink);
     free(packed);
     return outcome;
 }
