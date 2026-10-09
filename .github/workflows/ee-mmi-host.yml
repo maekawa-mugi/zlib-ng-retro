@@ -43,6 +43,8 @@ jobs:
               test/ps2/crc_poly_mmi.c test/ps2/test_crc_poly_host.c
             /tmp/test_crc_poly_host
           done
+      - name: Verify rank scope and whole-stream MB/s helpers
+        run: sh test/ps2/test_rank_host.sh
       - name: Check generic host CMake build still works
         run: |
           cmake -S . -B build-host -DWITH_GTEST=OFF \
