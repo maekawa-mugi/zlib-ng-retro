@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 #include "ps2/bench_display.h"
+#include "ps2/roundtrip_metrics.h"
 #include "ps2/stress_diagnostic.h"
 
 #ifndef MIPS_MMI
@@ -40,112 +41,131 @@ static void generate(unsigned pattern, size_t len) {
     }
 }
 
+/* Same original-byte numerator for both phases; these are NOT A/B
+ * variants. Every case uses the same verified compressed stream for
+ * all six decode samples; samples alternate phase order. No allocations,
+ * generated test data, validation or GS writes occur inside timing. */
 int main(void) {
     static const char *const names[] = {"compress", "decode"};
-    ps2_bench_candidates("roundtrip", names, 2, 0);
-    /* Level 1's quick strategy can expand random data by more than 1KB.
-     * Allocate once, outside the timed loops, using the library's bound. */
+    static const size_t lengths[] = {4096U, 65536U, MAX_BENCH};
+    static const unsigned iterations[] = {250U, 40U, 12U};
+    static const int levels[] = {1, 6, 9};
     z_uintmax_t capacity = PREFIX(compressBound)(MAX_BENCH);
     uint8_t *packed = malloc((size_t)capacity);
+    int outcome = 0;
+    ps2_bench_candidates("roundtrip", names, 2, 0);
     if (!packed) {
         ps2_bench_check(0, 0);
-        mmi_stress_fail("roundtrip allocation FAIL capacity=%lu\n", (unsigned long)capacity);
+        mmi_stress_fail("roundtrip allocation FAIL capacity=%lu\n",
+                        (unsigned long)capacity);
         return 1;
     }
-    static const size_t lengths[] = {4096, 65536, MAX_BENCH};
-    static const unsigned iterations[] = {250, 40, 12};
-    static const int levels[] = {1, 6, 9};
-    printf("PS2 MMI roundtrip benchmark CLOCKS_PER_SEC=%lu\n",
-           (unsigned long)CLOCKS_PER_SEC);
-    puts("pattern level input_size compressed_size iterations compress_ticks decompress_ticks");
-
-    for (unsigned pattern = 0; pattern < 4; ++pattern)
-        for (unsigned li = 0; li < sizeof(lengths)/sizeof(lengths[0]); ++li) {
+    printf("RT_META,zlib-ng-mmi-build,%lu,%u,uncompressed_MB/s,clock()\n",
+           (unsigned long)CLOCKS_PER_SEC,PS2_ROUNDTRIP_SAMPLES);
+    puts("RT_HEADER,implementation,pattern,level,input_bytes,compressed_bytes,"
+         "repetitions,compress_ticks_median,decode_ticks_median,"
+         "compress_MBps,decode_MBps");
+    for (unsigned pattern = 0; pattern < 4 && !outcome; ++pattern) {
+        for (unsigned li = 0; li < 3 && !outcome; ++li) {
             size_t len = lengths[li];
             generate(pattern, len);
-            for (unsigned leveli = 0; leveli < sizeof(levels)/sizeof(levels[0]); ++leveli) {
-                ps2_bench_case("roundtrip cases", (pattern * 3 + li) * 3 + leveli + 1, 36);
-                int level = levels[leveli];
+            for (unsigned leveli = 0; leveli < 3; ++leveli) {
+                unsigned sample, phase;
+                int level = levels[leveli], status;
                 unsigned count = ps2_bench_iterations(iterations[li]);
-                z_uintmax_t used = capacity;
-                z_uintmax_t decoded = sizeof(unpacked);
-
-                int status = PREFIX(compress2)(packed, &used, input,
-                                               (z_uintmax_t)len, level);
+                z_uintmax_t used = capacity, decoded = sizeof(unpacked);
+                clock_t samples[2][PS2_ROUNDTRIP_SAMPLES];
+                double med_c, med_d, rate_c, rate_d;
+                ps2_bench_case("roundtrip cases",
+                               (pattern * 3U + li) * 3U + leveli + 1U,36U);
+                status = PREFIX(compress2)(packed, &used, input,
+                                           (z_uintmax_t)len, level);
                 ps2_bench_check(0, status == Z_OK);
                 if (status != Z_OK) {
-                    mmi_stress_fail("MMI roundtrip bench compress FAIL p=%u level=%d len=%lu status=%d\n",
-                           pattern, level, (unsigned long)len, status);
-                    free(packed);
-                    return 1;
+                    mmi_stress_fail("RT_FAIL,compress_reference,%u,%d,%lu,%d\n",
+                                    pattern,level,(unsigned long)len,status);
+                    outcome = 1; break;
                 }
-                status = PREFIX(uncompress)(unpacked, &decoded, packed, used);
-                int decoded_ok = status == Z_OK && (size_t)decoded == len && memcmp(input, unpacked, len) == 0;
-                ps2_bench_check(1, decoded_ok);
-                if (!decoded_ok) {
-                    mmi_stress_fail("MMI roundtrip bench decode FAIL p=%u level=%d len=%lu status=%d\n",
-                           pattern, level, (unsigned long)len, status);
-                    free(packed);
-                    return 1;
+                status = PREFIX(uncompress)(unpacked,&decoded,packed,used);
+                ps2_bench_check(1,status == Z_OK && decoded == len &&
+                                memcmp(input,unpacked,len) == 0);
+                if (status != Z_OK || decoded != len ||
+                    memcmp(input,unpacked,len) != 0) {
+                    mmi_stress_fail("RT_FAIL,decode_reference,%u,%d,%lu,%d\n",
+                                    pattern,level,(unsigned long)len,status);
+                    outcome = 1; break;
                 }
-
-                clock_t compress_start = clock();
-                for (unsigned i = 0; i < count; ++i) {
-                    z_uintmax_t size = capacity;
-                    status = PREFIX(compress2)(packed, &size, input,
-                                               (z_uintmax_t)len, level);
-                    if (status != Z_OK || size != used) {
-                        ps2_bench_check(0, 0);
-                        mmi_stress_fail("MMI roundtrip bench repeated compress FAIL p=%u len=%lu level=%d\n",
-                               pattern, (unsigned long)len, level);
-                        free(packed);
-                        return 1;
+                for (sample = 0; sample < PS2_ROUNDTRIP_SAMPLES; ++sample) {
+                    for (unsigned step = 0; step < 2; ++step) {
+                        clock_t t0,t1;
+                        phase=(sample+step)&1U;
+                        t0=clock();
+                        if (phase == 0) {
+                            for(unsigned i=0; i<count; ++i) {
+                                z_uintmax_t size=capacity;
+                                status=PREFIX(compress2)(packed,&size,input,
+                                                         (z_uintmax_t)len,level);
+                                if (status!=Z_OK || size!=used) {
+                                    outcome=1; break;
+                                }
+                                sink ^= (uint32_t)size;
+                            }
+                        } else {
+                            for(unsigned i=0; i<count; ++i) {
+                                z_uintmax_t size=sizeof(unpacked);
+                                status=PREFIX(uncompress)(unpacked,&size,
+                                                          packed,used);
+                                if(status!=Z_OK || (size_t)size!=len) {
+                                    outcome=1; break;
+                                }
+                                sink ^= unpacked[i%len];
+                            }
+                        }
+                        t1=clock();
+                        samples[phase][sample]=
+                            (t0==(clock_t)-1 || t1==(clock_t)-1 || t1<t0)
+                                ? (clock_t)-1 : t1-t0;
+                        if (outcome) break;
                     }
-                    sink ^= (uint32_t)size;
-                }
-                clock_t compress_stop = clock();
-                ps2_bench_check(0, 1);  /* Never call screen hooks in the timed loop. */
-
-                clock_t decompress_start = clock();
-                for (unsigned i = 0; i < count; ++i) {
-                    z_uintmax_t size = sizeof(unpacked);
-                    status = PREFIX(uncompress)(unpacked, &size, packed, used);
-                    if (status != Z_OK || (size_t)size != len) {
-                        ps2_bench_check(1, 0);
-                        mmi_stress_fail("MMI roundtrip bench repeated decode FAIL p=%u len=%lu level=%d\n",
-                               pattern, (unsigned long)len, level);
-                        free(packed);
-                        return 1;
+                    if (outcome) break;
+                    /* Six independent correctness gates, outside timers. */
+                    if (memcmp(input,unpacked,len)!=0) {
+                        outcome=1; break;
                     }
-                    sink ^= unpacked[i % len];
                 }
-                clock_t decompress_stop = clock();
-                ps2_bench_check(1, 1);  /* Timed batch decoded successfully. */
-                ps2_bench_check(1, memcmp(input, unpacked, len) == 0);
-                if (memcmp(input, unpacked, len) != 0) {
-                    mmi_stress_fail("MMI roundtrip benchmark output mismatch\n");
-                    free(packed);
-                    return 1;
+                if (outcome) {
+                    ps2_bench_check(0,0);
+                    ps2_bench_check(1,0);
+                    mmi_stress_fail("RT_FAIL,sample,%u,%d,%lu,%u\n",
+                                    pattern,level,(unsigned long)len,sample);
+                    break;
                 }
-
-                clock_t c = compress_stop - compress_start;
-                clock_t u = decompress_stop - decompress_start;
-                ps2_bench_ticks(0, compress_start == (clock_t)-1 || compress_stop == (clock_t)-1 ? (clock_t)-1 : c);
-                ps2_bench_ticks(1, decompress_start == (clock_t)-1 || decompress_stop == (clock_t)-1 ? (clock_t)-1 : u);
-                if (compress_start == (clock_t)-1 || compress_stop == (clock_t)-1 ||
-                    decompress_start == (clock_t)-1 || decompress_stop == (clock_t)-1 ||
-                    c <= 0 || u <= 0) {
-                    printf("%u %d %lu %lu %u clock_unavailable_or_too_coarse\n",
-                           pattern, level, (unsigned long)len,
-                           (unsigned long)used, count);
-                } else {
-                    printf("%u %d %lu %lu %u %ld %ld\n", pattern, level,
-                           (unsigned long)len, (unsigned long)used, count,
-                           (long)c, (long)u);
+                med_c=ps2_roundtrip_median6(samples[0]);
+                med_d=ps2_roundtrip_median6(samples[1]);
+                if (med_c<=0.0 || med_d<=0.0) {
+                    ps2_bench_ticks(0,(clock_t)-1);
+                    ps2_bench_ticks(1,(clock_t)-1);
+                    printf("RT_INVALID,%u,%d,%lu,clock_unavailable_or_coarse\n",
+                           pattern,level,(unsigned long)len);
+                    /* Timer invalid is not proof of a performance gain.
+                     * Correctness is still independently verified. */
+                    continue;
                 }
+                rate_c=ps2_roundtrip_mb_s(len,count,med_c);
+                rate_d=ps2_roundtrip_mb_s(len,count,med_d);
+                ps2_bench_ticks(0,(clock_t)med_c);
+                ps2_bench_ticks(1,(clock_t)med_d);
+                printf("RT_CASE,zlib-ng-mmi-build,%u,%d,%lu,%lu,%u,"
+                       "%.3f,%.3f,%.6f,%.6f\n",
+                       pattern,level,(unsigned long)len,
+                       (unsigned long)used,count,med_c,med_d,rate_c,rate_d);
+                ps2_bench_roundtrip_rate(pattern,(unsigned)level,len,
+                                         rate_c,rate_d);
             }
         }
-    printf("benchmark sink=%lu\n", (unsigned long)sink);
+    }
+    printf("RT_RESULT,%s,36 cases,checksum=%lu\n",
+           outcome ? "FAIL":"PASS",(unsigned long)sink);
     free(packed);
-    return 0;
+    return outcome;
 }
