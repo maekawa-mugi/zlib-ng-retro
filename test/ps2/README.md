@@ -76,7 +76,7 @@ the benchmarks or stress, avoiding duplicate execution. Use `--all` when you
 want every regression and every benchmark regardless of overlap. The screen
 shows selection coverage and `MMI_SUITE_COVERAGE` records it in stdout.
 
-The eight kernel competitions are:
+The nine kernel competitions are:
 
 - `slide_hash`: serial / two-wide loads / four-wide loads
 - `compare256`: generic / 16-byte or 32-byte or 64-byte prefilter, with
@@ -89,6 +89,8 @@ The eight kernel competitions are:
 - `adler32_copy`: generic C+copy / MMI+copy / fused MMI
 - `chorba`: braid / single tap / paired tap / thresholds 1024, 4096, 8192
 - `chorba_copy`: braid C+copy / MMI+copy / fused MMI
+- `crc_poly`: standalone 13-way CRC32 zero-polynomial comparison,
+  reported by input size in `CRC_POLY_*` records, not pooled into one winner
 
 Whole-stream `roundtrip` validates compression and decompression with full
 output comparison, **not** against each other as competing candidates.
@@ -172,8 +174,8 @@ chosen ELF to PS2 or open it with PCSX2 and your configured BIOS.
 - `--list`: list entries on stdout.
 
 With Adler, compare64 and Chorba enabled, default integrated mode runs
-three independent tests (including exhaustive compare256), plus all eight
-benchmark entrypoints. The standalone `--all` mode runs sixteen entries.
+three independent tests (including exhaustive compare256), plus all nine
+benchmark entrypoints. The standalone `--all` mode runs seventeen entries.
 The display never labels incomplete or invalid measurements as fastest.
 
 ## Validation and fixes
