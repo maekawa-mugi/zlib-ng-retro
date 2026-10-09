@@ -13,14 +13,6 @@
 #endif
 
 #define MAX_BENCH (1024u * 1024u)
-#ifdef PS2_SPR_BENCH
-extern uint32_t crc32_chorba_mmi_spr_bench(uint32_t, const uint8_t *, size_t);
-extern uint32_t crc32_chorba_mmi_spr_residue_bench(uint32_t, const uint8_t *, size_t);
-extern uint32_t crc32_chorba_mmi_spr_both_bench(uint32_t, const uint8_t *, size_t);
-#define CHORBA_VARIANTS 9
-#else
-#define CHORBA_VARIANTS 6
-#endif
 static uint8_t data[MAX_BENCH + 16] ALIGNED_(16);
 static volatile uint32_t keep_result;
 typedef uint32_t (*crc_func)(uint32_t, const uint8_t *, size_t);
@@ -41,9 +33,6 @@ static clock_t run(crc_func fn, const uint8_t *buf, size_t size,
 int main(void) {
     static const char *const names[] = {
         "braid", "single", "paired", "threshold1K", "threshold4K", "threshold8K"
-#ifdef PS2_SPR_BENCH
-        , "spr_ring", "spr_residue", "spr_both"
-#endif
     };
     ps2_bench_candidates("chorba", names, CHORBA_VARIANTS, 1);
     static const size_t sizes[] = {
@@ -59,11 +48,6 @@ int main(void) {
         crc32_chorba_mmi_threshold1024,
         crc32_chorba_mmi_threshold4096,
         crc32_chorba_mmi_threshold8192
-#ifdef PS2_SPR_BENCH
-        , crc32_chorba_mmi_spr_bench,
-          crc32_chorba_mmi_spr_residue_bench,
-          crc32_chorba_mmi_spr_both_bench
-#endif
     };
     uint32_t rng = 0x5a17e4b3u;
     for (unsigned i = 0; i < sizeof(data); ++i) {
@@ -74,9 +58,6 @@ int main(void) {
            (unsigned long)CLOCKS_PER_SEC);
     puts("CRC32 bench: columns size offset reps, one ticks/variant, then braid/variant ratios");
     puts("variant order: braid single paired threshold1K threshold4K threshold8K"
-#ifdef PS2_SPR_BENCH
-         " spr_ring spr_residue spr_both"
-#endif
          );
 
     for (unsigned i = 0; i < sizeof(sizes)/sizeof(sizes[0]); ++i)
@@ -107,10 +88,6 @@ int main(void) {
                     ticks[v] = run(variants[v], p, sizes[i], repetitions);
             }
             for (unsigned v = 0; v < CHORBA_VARIANTS; ++v) ps2_bench_ticks(v, ticks[v]);
-#ifdef PS2_SPR_BENCH
-            if (sizes[i] == 32768u && align == 0u && ticks[2] > 0 && ticks[6] > 0)
-                ps2_bench_spr_highlight(0, (double)ticks[2] / ticks[6]);
-#endif
             int valid = 1;
             for (unsigned v = 0; v < CHORBA_VARIANTS; ++v)
                 if (ticks[v] <= 0) valid = 0;
