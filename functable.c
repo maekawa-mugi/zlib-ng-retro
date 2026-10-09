@@ -322,6 +322,25 @@ static int init_functable(void) {
 #endif
 
 
+    // SPARC - VIS1
+#ifdef SPARC_VIS1
+    if (cf.sparc.has_vis1) {
+        ft.adler32 = &adler32_vis1;
+        ft.adler32_copy = &adler32_copy_vis1;
+#  ifdef SPARC_VIS1_CHUNKSET
+        ft.chunkmemset_safe = &chunkmemset_safe_sparc;
+#  endif
+        ft.compare256 = &compare256_vis1;
+        ft.longest_match = &longest_match_vis1;
+        ft.longest_match_slow_knuth = &longest_match_slow_knuth_vis1;
+        ft.longest_match_slow_roll = &longest_match_slow_roll_vis1;
+#  ifdef SPARC_VIS1_SLIDEHASH
+        ft.slide_hash = &slide_hash_vis1;
+        ft.slide_hash_head = &slide_hash_head_vis1;
+#  endif
+    }
+#endif
+
     // MIPS - MSA
 #ifdef MIPS_MSA
 #  ifndef MIPS_MSA_NATIVE

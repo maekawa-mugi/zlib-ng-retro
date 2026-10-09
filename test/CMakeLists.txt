@@ -11,6 +11,60 @@ macro(configure_test_executable target)
     endif()
 endmacro()
 
+# Portable contract tests for VIS1 lane math and SPARC HWCAP decode.
+# This test runs on every host and never executes VIS instructions.
+add_executable(sparc_vis1_models test_sparc_vis1_models.c)
+target_include_directories(sparc_vis1_models PRIVATE ${PROJECT_SOURCE_DIR})
+set_target_properties(sparc_vis1_models PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+add_test(NAME sparc_vis1_models COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR}
+    $<TARGET_FILE:sparc_vis1_models>)
+
+# Compare VIS1 vector-byte matches with the scalar reference at all offsets.
+if(BASEARCH_SPARC_FOUND AND WITH_OPTIM AND WITH_VIS1 AND HAVE_SPARC_VIS1_ASM)
+    add_executable(vis1_compare256 test_vis1_compare256.c ${PROJECT_SOURCE_DIR}/arch/sparc/compare256_vis1.c)
+    configure_test_executable(vis1_compare256)
+    # Only the VIS source may use VIS instructions: the test harness must
+    # remain runnable on SPARC CPUs without VIS when dispatch is enabled.
+    set_source_files_properties(${PROJECT_SOURCE_DIR}/arch/sparc/compare256_vis1.c
+        PROPERTIES COMPILE_FLAGS "${VIS1FLAG} ${NOLTOFLAG}")
+    target_link_libraries(vis1_compare256 zlib-ng)
+    add_test(NAME vis1_compare256 COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:vis1_compare256>)
+    set_tests_properties(vis1_compare256 PROPERTIES SKIP_RETURN_CODE 77)
+
+    add_executable(vis1_adler32 test_vis1_adler32.c ${PROJECT_SOURCE_DIR}/arch/sparc/adler32_vis1.c)
+    configure_test_executable(vis1_adler32)
+    set_source_files_properties(${PROJECT_SOURCE_DIR}/arch/sparc/adler32_vis1.c
+        PROPERTIES COMPILE_FLAGS "${VIS1FLAG} ${NOLTOFLAG}")
+    target_link_libraries(vis1_adler32 zlib-ng)
+    add_test(NAME vis1_adler32 COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:vis1_adler32>)
+    set_tests_properties(vis1_adler32 PROPERTIES SKIP_RETURN_CODE 77)
+
+    if(WITH_VIS1_CHUNKSET AND HAVE_SPARC_VIS1_CHUNKSET_ASM)
+        add_executable(vis1_chunkmemset test_vis1_chunkmemset.c
+            ${PROJECT_SOURCE_DIR}/arch/sparc/chunkmemset_sparc.c)
+        configure_test_executable(vis1_chunkmemset)
+        set_source_files_properties(${PROJECT_SOURCE_DIR}/arch/sparc/chunkmemset_sparc.c
+            PROPERTIES COMPILE_FLAGS "${VIS1FLAG} ${NOLTOFLAG}")
+        target_link_libraries(vis1_chunkmemset zlib-ng)
+        add_test(NAME vis1_chunkmemset COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR}
+            $<TARGET_FILE:vis1_chunkmemset>)
+        set_tests_properties(vis1_chunkmemset PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
+
+    if(WITH_VIS1_SLIDEHASH AND HAVE_SPARC_VIS1_SLIDEHASH_ASM)
+        add_executable(vis1_slide_hash test_vis1_slide_hash.c
+            ${PROJECT_SOURCE_DIR}/arch/sparc/slide_hash_vis1.c)
+        configure_test_executable(vis1_slide_hash)
+        set_source_files_properties(${PROJECT_SOURCE_DIR}/arch/sparc/slide_hash_vis1.c
+            PROPERTIES COMPILE_FLAGS "${VIS1FLAG} ${NOLTOFLAG}")
+        target_link_libraries(vis1_slide_hash zlib-ng)
+        add_test(NAME vis1_slide_hash COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR}
+            $<TARGET_FILE:vis1_slide_hash>)
+        set_tests_properties(vis1_slide_hash PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
+endif()
+
 if(TEST_STOCK_ZLIB)
     add_definitions(-DTEST_STOCK_ZLIB)
 endif()

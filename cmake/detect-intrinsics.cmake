@@ -1,6 +1,106 @@
 # detect-intrinsics.cmake -- Detect compiler intrinsics support
 # Licensed under the Zlib license, see LICENSE.md for details
 
+# Compile VIS1 code separately; leave generic code usable on non-VIS CPUs.
+macro(check_sparc_vis1_asm)
+    if(NOT NATIVEFLAG)
+        set(VIS1FLAG "-mvis")
+    endif()
+    set(CMAKE_REQUIRED_FLAGS "${VIS1FLAG} ${NATIVEFLAG} ${ZNOLTOFLAG}")
+    check_c_source_compiles([=[
+        #include <stdint.h>
+        static unsigned int compare8(const uint64_t *a, const uint64_t *b) {
+            unsigned int mask;
+            __asm__ __volatile__(
+                "ldd [%1], %%f0\n\t"
+                "ldd [%2], %%f2\n\t"
+                "fcmpeq8 %%f0, %%f2, %0\n\t"
+                "fzero %%f4\n\t"
+                "fpmerge %%f4, %%f0, %%f6\n\t"
+                "fpadd16 %%f6, %%f4, %%f4"
+                : "=r" (mask) : "r" (a), "r" (b)
+                : "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "memory");
+            return mask;
+        }
+        int main(void) {
+            uint64_t a = 0;
+            return compare8(&a, &a) != 255;
+        }
+    ]=] HAVE_SPARC_VIS1_ASM)
+    set(CMAKE_REQUIRED_FLAGS)
+endmacro()
+
+# Linux/SPARC AT_HWCAP bit 13 (0x00002000) identifies VIS1.
+# Slide-hash additionally requires VIS1 packed compare and bitwise operations.
+# Check separately so a restricted toolchain may still build other VIS1 code.
+macro(check_sparc_vis1_slidehash_asm)
+    set(CMAKE_REQUIRED_FLAGS "${VIS1FLAG} ${NATIVEFLAG} ${ZNOLTOFLAG}")
+    check_c_source_compiles([=[
+        #include <stdint.h>
+        int main(void) {
+            uint64_t a __attribute__((aligned(8))) = 0;
+            unsigned mask;
+            __asm__ __volatile__(
+                "ldd [%1], %%f0\n\t"
+                "fzero %%f8\n\t"
+                "fcmpgt16 %%f8, %%f0, %0\n\t"
+                "fpsub16 %%f0, %%f0, %%f4\n\t"
+                "fand %%f4, %%f0, %%f6"
+                : "=r" (mask) : "r" (&a)
+                : "f0", "f1", "f4", "f5", "f6", "f7",
+                  "f8", "f9", "memory");
+            return (int)mask;
+        }
+    ]=] HAVE_SPARC_VIS1_SLIDEHASH_ASM)
+    set(CMAKE_REQUIRED_FLAGS)
+endmacro()
+
+# Probe SPARC floating-point ldd/std with base+offset addressing separately.
+# A toolchain may support VIS1 compare instructions but reject this syntax.
+macro(check_sparc_vis1_chunkset_asm)
+    set(CMAKE_REQUIRED_FLAGS "${VIS1FLAG} ${NATIVEFLAG} ${ZNOLTOFLAG}")
+    check_c_source_compiles([=[
+        #include <stdint.h>
+        int main(void) {
+            uint64_t words[8] __attribute__((aligned(8))) = {0};
+            const void *src = words;
+            void *dst = words + 4;
+            __asm__ __volatile__(
+                "ldd [%1], %%f0\n\t"
+                "std %%f0, [%0]\n\t"
+                "ldd [%1 + 8], %%f2\n\t"
+                "std %%f2, [%0 + 8]\n\t"
+                "ldd [%1 + 16], %%f4\n\t"
+                "std %%f4, [%0 + 16]\n\t"
+                "ldd [%1 + 24], %%f6\n\t"
+                "std %%f6, [%0 + 24]"
+                : : "r" (dst), "r" (src)
+                : "memory", "f0", "f1", "f2", "f3",
+                  "f4", "f5", "f6", "f7");
+            return (int)words[0];
+        }
+    ]=] HAVE_SPARC_VIS1_CHUNKSET_ASM)
+    set(CMAKE_REQUIRED_FLAGS)
+endmacro()
+
+macro(check_sparc_vis1_runtime)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HAVE_SYS_AUXV_H)
+        check_c_source_compiles([=[
+            #ifndef _GNU_SOURCE
+            #define _GNU_SOURCE 1
+            #endif
+            #include <sys/auxv.h>
+            #include <elf.h>
+            #ifndef AT_HWCAP
+            #error AT_HWCAP unavailable
+            #endif
+            int main(void) {
+                return (int)getauxval(AT_HWCAP);
+            }
+        ]=] HAVE_SPARC_GETAUXVAL)
+    endif()
+endmacro()
+
 macro(check_armv8_compiler_flag)
     if(NOT NATIVEFLAG)
         if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")

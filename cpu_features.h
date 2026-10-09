@@ -14,6 +14,8 @@
 #  include "arch/arm/arm_features.h"
 #elif defined(MIPS_FEATURES)
 #  include "arch/mips/mips_features.h"
+#elif defined(SPARC_FEATURES)
+#  include "arch/sparc/sparc_features.h"
 #elif defined(PPC_FEATURES) || defined(POWER_FEATURES)
 #  include "arch/power/power_features.h"
 #elif defined(S390_FEATURES)
@@ -33,6 +35,8 @@ struct cpu_features {
 /* GCC defines "mips" as "1", which isn't valid name for struct member */
 #  undef mips
     struct mips_cpu_features mips;
+#elif defined(SPARC_FEATURES)
+    struct sparc_cpu_features sparc;
 #elif defined(PPC_FEATURES) || defined(POWER_FEATURES)
     struct power_cpu_features power;
 #elif defined(S390_FEATURES)

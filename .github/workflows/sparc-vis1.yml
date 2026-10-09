@@ -1,0 +1,55 @@
+name: SPARC VIS1 validation
+
+on:
+  push:
+    branches:
+      - feature/sparc-vis1
+    paths:
+      - 'arch/sparc/**'
+      - 'test/test_*vis1*'
+      - 'test/CMakeLists.txt'
+      - 'cmake/detect-intrinsics.cmake'
+      - 'cmake/toolchain-sparc64.cmake'
+      - 'CMakeLists.txt'
+      - '.github/workflows/sparc-vis1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-models:
+    name: Portable arithmetic models
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure C99 mathematical models
+        env:
+          CC: ${{ matrix.cc }}
+        run: cmake -S . -B build-models -DCMAKE_C_STANDARD=99 -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+      - name: Build portable model test
+        run: cmake --build build-models --target sparc_vis1_models -j2
+      - name: Check portable model
+        run: ctest --test-dir build-models -R '^sparc_vis1_models$' --output-on-failure
+
+  sparc64:
+    name: SPARC64 cross-build and QEMU CTest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install SPARC64 GCC and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-sparc64-linux-gnu g++-sparc64-linux-gnu libc6-dev-sparc64-cross qemu-user
+      - name: Configure SPARC VIS1 C99 build
+        run: cmake -S . -B build-sparc -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-sparc64.cmake -DCMAKE_C_STANDARD=99 -DWITH_VIS1=ON -DWITH_RUNTIME_CPU_DETECTION=ON -DBUILD_TESTING=ON -DWITH_GTEST=OFF
+      - name: Require successful VIS1 compiler probe
+        run: grep -q '^HAVE_SPARC_VIS1_ASM:INTERNAL=1$' build-sparc/CMakeCache.txt
+      - name: Build SPARC VIS1 code
+        run: cmake --build build-sparc -j2
+      - name: Run QEMU SPARC64 tests
+        run: ctest --test-dir build-sparc -R '^(sparc_vis1_models|vis1_)' --output-on-failure
