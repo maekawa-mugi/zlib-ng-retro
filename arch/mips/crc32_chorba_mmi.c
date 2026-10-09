@@ -139,7 +139,7 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
     uint8_t first[16] ALIGNED_(16);
     uint8_t residue[CHORBA_MMI_RESIDUE] ALIGNED_(16);
 
-    memset(ring, 0, sizeof(ring));
+    memset(ring, 0, CHORBA_MMI_RING_BYTES);
     memcpy(first, buf, sizeof(first));
 
     /* For a reflected CRC and >=4 input bytes, folding the raw seed
