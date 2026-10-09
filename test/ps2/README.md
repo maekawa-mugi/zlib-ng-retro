@@ -1,50 +1,66 @@
 # PS2SDK EE one-launch kernel tournament
 
-## Expanded one-launch scratchpad experiment matrix
+## CRC32 zero-polynomial research (RAM-only)
 
-The default QUICK mode includes all SPR correctness checks and timing
-with reduced repetition counts. Use the QUICK run first to avoid wasting
-real-hardware time; reserve --full for a confirmed stable build.
-A single final GS screen now reports representative RAM/SPR ratios for
-Chorba, Compare256, and Adler-32. Detailed input sizes are stdout-only.
+This branch keeps the integrated zlib_ng_mmi.elf harness and removes **all
+PS2 scratchpad benchmarks**, scratchpad selection and scratchpad display.
+The product CRC32 dispatcher remains unchanged. Only the standalone PS2
+benchmark ELF links the new experiment in `test/ps2/crc_poly_mmi.c`.
 
+The CRC32 experiment is based on Sam Russell's *Chorba: A novel CRC32
+implementation* (arXiv:2412.16398). Each candidate's polynomial is
+verified modulo the **reflected** CRC32 generator 0x1DB710641. The
+original paper's dense degree-5869 four-term expression must be
+reciprocated to x^5869 + x^48 + x^34 + 1 for this representation.
+All zero-polynomial exponents are scaled by 128 to match the
+R5900's 16-byte LQ/PXOR/SQ operations. The 32-column inverse CRC
+transform is separately derived for each residue length.
 
+`bench_crc_poly` tests 13 variants: normal CRC32 braid, a 256-byte
+lookup table, bitwise reference for short buffers, original Chorba
+single/paired, and eight new polynomial schedules:
+`gen32`, `chorba352`, `small300`, `small600`, `sparse4_3006`,
+`dense4_5869`, `dense5_14870`, `sparse3_91639`. Large-degree
+schemes are tried only at sizes where their 128-bit look-ahead fits;
+ineligible candidates are explicitly marked `SKIP_BELOW_MINIMUM`,
+**never** credited with a fallback win.
 
-Chorba now has nine ranked candidates: the original six, spr_ring,
-spr_residue and spr_both. These isolate the 1024-byte scatter ring
-and 704-byte final residue in RAM or EE SPR, with the same CRC check.
-Adler-32 additionally tests genuine prefix/formula MMI checksum kernels
-on RAM, preloaded SPR, and copy-inclusive SPR for 64/1024/8192/
-16368-byte inputs, aligned and offset by one byte. Output records:
-ZLIB_SPR_ADLER and ZLIB_SPR_ADLER_RESULT.
-Compare256 also benchmarks genuine plain and prefilter64_swar MMI
-with RAM, first input in SPR, second in SPR, both, and copies inside
-the timed loop. Three alignments and six mismatch locations are covered.
-The additional stdout records are ZLIB_SPR_COMPARE and
-ZLIB_SPR_COMPARE_RESULT. No production dispatch changes.
+Input lengths span 128 B, 1 KiB, 4 KiB, 8 KiB, 16 KiB, 32 KiB,
+64 KiB, 256 KiB, 1 MiB and 4 MiB, at offsets 0/1. Every eligible
+variant must equal braid CRC32 on the exact same input and initial CRC
+before it is timed. For each candidate and size, six rotated-order
+samples are taken. The reported time is the median per-call ticks,
+not the aggregate over incompatible sizes. The existing nine GS
+ranking groups are retained. Rows 19 and 22 show the separate
+size-specific winners for 4 KiB, 64 KiB and 1 MiB.
 
-bash test/ps2/build.sh now builds ONLY build-ps2-mmi/zlib_ng_mmi.elf;
-it does not build ps2_mmi_test and removes stale
-build-ps2-mmi/zlib_ng_mmi_test_only.elf. The CMake target remains
-available for manual explicit builds, but is not part of this script.
+Machine-readable records:
+`CRC_POLY_META`, `CRC_POLY_SPEC`, `CRC_POLY_SAMPLE`,
+`CRC_POLY_CASE`, `CRC_POLY_WINNER`, `CRC_POLY_RESULT`.
+The final `MMI_SUITE_SUMMARY` and `PS2 EE MMI RESULT` are still emitted.
 
+Build (PS2SDK already configured):
 
-## PS2 scratchpad CRC32 Chorba benchmark
+```sh
+bash test/ps2/build.sh
+# only build-ps2-mmi/zlib_ng_mmi.elf is generated
+```
 
-PS2 mmi_suite adds a seventh chorba competitor named spr_ring.
-It uses paired ten-tap EE MMI XOR scatter with the 1,024-byte ring
-at 0x70000000 in the EE 16 KiB scratchpad instead of on the stack.
-All sizes and offsets are validated against crc32_braid before timing.
-Short sizes may use braid fallback, so look at the large-size results.
-Timing includes ring clearing and residue reduction; it excludes DMA
-(there is no DMA). It is benchmark-only and not production dispatch.
+`QUICK` is the default; `--full` increases repetitions. Neither
+mode selects a faster polynomial for production zlib-ng.
+For host regression of every candidate, seed and buffer boundary:
 
-Build as usual: bash test/ps2/build.sh
-Run zlib_ng_mmi.elf, preferably using --full for the detailed test.
-Capture MMI_CANDIDATE,chorba and MMI_WINNER,chorba records.
-The run must have exclusive SPR ownership and no concurrent SPR/DMA
-user. Neither the cross-build nor hardware timing has been verified.
+```sh
+cc -std=c11 -O2 -Wall -Wextra -Werror -DCRC_POLY_HOST_TEST \
+  -o /tmp/test_crc_poly_host \
+  test/ps2/crc_poly_mmi.c test/ps2/test_crc_poly_host.c
+/tmp/test_crc_poly_host
+```
 
+The R5900-only LQ/PXOR/SQ path still requires PS2SDK cross-compilation
+and actual EE/PCSX2 execution before accepting hardware timing results.
+The degree-91639 variant uses a 2 MiB ring in benchmark BSS and is
+intentionally excluded from short input sizes.
 
 **No ELF arguments are required.** Running `mmi_suite.elf` selects the
 nonduplicated integrated validation, executes all enabled A/B/C kernels,
