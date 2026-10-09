@@ -16,12 +16,24 @@
 
 static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
                                            const uint8_t *src1,
-                                           int prefilter64, int firstdiff64) {
+                                           int prefilter64, int firstdiff64, int hybrid16) {
 #ifndef MIPS_MMI_COMPARE64
     (void)prefilter64;
 #endif
     uint8_t differences[16] ALIGNED_(16);
     uint32_t len = 0;
+    /* Early mismatches dominate many Deflate candidate probes.
+     * Two safe unaligned 64-bit XORs can reject their first 16 bytes
+     * without entering the MMI store/reload/branch path. Aligned
+     * long matches continue with the original full MMI vector loop. */
+    if (hybrid16) {
+        uint64_t lo=zng_memread_8(src0)^zng_memread_8(src1);
+        uint64_t hi;
+        if (lo!=0) return zng_first_diff_byte64(lo);
+        hi=zng_memread_8(src0+8)^zng_memread_8(src1+8);
+        if (hi!=0) return 8U+zng_first_diff_byte64(hi);
+        len=16U;
+    }
     /* Different 16-byte alignment residues can never both reach an
      * aligned address at the same comparison offset. Use safe 64-bit
      * SWAR comparisons instead of falling back to 256 byte checks. */
@@ -143,27 +155,33 @@ static inline uint32_t compare256_mmi_impl(const uint8_t *src0,
  * callable in the same EE executable. The optional 64-byte equality
  * prefilter is independent of this choice, giving four A/B combinations. */
 Z_INTERNAL uint32_t compare256_mmi_plain(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 0, 0);
+    return compare256_mmi_impl(a, b, 0, 0, 0);
 }
 Z_INTERNAL uint32_t compare256_mmi_swar(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 0, 1);
+    return compare256_mmi_impl(a, b, 0, 1, 0);
+}
+Z_INTERNAL uint32_t compare256_mmi_hybrid16(const uint8_t *a, const uint8_t *b) {
+    return compare256_mmi_impl(a, b, 0, 1, 1);
 }
 
 #ifdef MIPS_MMI_COMPARE64
+Z_INTERNAL uint32_t compare256_mmi_hybrid16_pre64(const uint8_t *a, const uint8_t *b) {
+    return compare256_mmi_impl(a, b, 1, 1, 1);
+}
 Z_INTERNAL uint32_t compare256_mmi_prefilter32(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 2, 0);
+    return compare256_mmi_impl(a, b, 2, 0, 0);
 }
 Z_INTERNAL uint32_t compare256_mmi_prefilter32_swar(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 2, 1);
+    return compare256_mmi_impl(a, b, 2, 1, 0);
 }
 #endif
 
 #ifdef MIPS_MMI_COMPARE64
 Z_INTERNAL uint32_t compare256_mmi_prefilter64(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 1, 0);
+    return compare256_mmi_impl(a, b, 1, 0, 0);
 }
 Z_INTERNAL uint32_t compare256_mmi_prefilter64_swar(const uint8_t *a, const uint8_t *b) {
-    return compare256_mmi_impl(a, b, 1, 1);
+    return compare256_mmi_impl(a, b, 1, 1, 0);
 }
 #endif
 
