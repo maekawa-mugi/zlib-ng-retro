@@ -2,6 +2,8 @@
 # Usage: PS2DEV=... PS2SDK=... bash test/ps2/build.sh [output-dir] [cmake-options...]
 set -euo pipefail
 source_dir=$(cd "$(dirname "$0")/../.." && pwd)
+build_jobs=${BUILD_JOBS:-${JOBS:-$(nproc)}}
+(( build_jobs >= 1 )) || { echo "BUILD_JOBS must be >= 1" >&2; exit 2; }
 output_dir=${1:-"$source_dir/build-ps2-mmi"}
 if (( $# )); then shift; fi
 cmake -S "$source_dir" -B "$output_dir" \
@@ -12,5 +14,5 @@ cmake -S "$source_dir" -B "$output_dir" \
     -DWITH_CRC32_CHORBA=ON -DBUILD_SHARED_LIBS=OFF \
     -DBUILD_TESTING=ON -DWITH_GTEST=OFF -DWITH_GZFILEOP=OFF \
     -DWITH_PS2_TEST_RUNNER=ON "$@"
-cmake --build "$output_dir" --target ps2_mmi_test mmi_suite -j "${BUILD_JOBS:-4}"
-printf '\nELFs: %s/ps2_mmi_test.elf and %s/mmi_suite.elf\n' "$output_dir" "$output_dir"
+cmake --build "$output_dir" --target ps2_mmi_test mmi_suite -j "$build_jobs"
+printf '\nELFs: %s/zlib_ng_mmi_test_only.elf and %s/zlib_ng_mmi.elf (parallel jobs=%s)\n' "$output_dir" "$output_dir" "$build_jobs"
