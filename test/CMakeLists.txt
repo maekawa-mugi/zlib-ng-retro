@@ -34,7 +34,7 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
         if(BUILD_SHARED_LIBS)
             message(FATAL_ERROR "PS2 test runner requires BUILD_SHARED_LIBS=OFF")
         endif()
-        add_executable(ps2_mmi_test ps2/main.c ps2/stress_diagnostic.c)
+        add_executable(ps2_mmi_test EXCLUDE_FROM_ALL ps2/main.c ps2/stress_diagnostic.c)
         target_compile_definitions(ps2_mmi_test PRIVATE PS2_STRESS_DIAGNOSTIC)
         target_include_directories(ps2_mmi_test PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
         set_target_properties(ps2_mmi_test PROPERTIES
