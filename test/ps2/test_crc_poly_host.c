@@ -48,7 +48,8 @@ int main(void)
     for(unsigned p=0;p<ps2_crc_poly_count();p++){
         size_t threshold=ps2_crc_poly_minimum(p);
         size_t lens[]={0,1,15,16,1023,4096,threshold-1,
-                       threshold,threshold+1,threshold+31};
+                       threshold,threshold+1,threshold+31,
+                       4u*1024u*1024u};
         printf("CRC_POLY_HOST_META,%s,%u,%u,%lu\n",
                ps2_crc_poly_name(p),ps2_crc_poly_degree(p),
                ps2_crc_poly_terms(p),(unsigned long)threshold);
