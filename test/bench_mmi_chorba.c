@@ -107,6 +107,10 @@ int main(void) {
                     ticks[v] = run(variants[v], p, sizes[i], repetitions);
             }
             for (unsigned v = 0; v < CHORBA_VARIANTS; ++v) ps2_bench_ticks(v, ticks[v]);
+#ifdef PS2_SPR_BENCH
+            if (sizes[i] == 32768u && align == 0u && ticks[2] > 0 && ticks[6] > 0)
+                ps2_bench_spr_highlight(0, (double)ticks[2] / ticks[6]);
+#endif
             int valid = 1;
             for (unsigned v = 0; v < CHORBA_VARIANTS; ++v)
                 if (ticks[v] <= 0) valid = 0;
