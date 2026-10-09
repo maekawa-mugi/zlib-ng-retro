@@ -29,8 +29,6 @@ add_test(NAME adler32_nmax COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FIL
 if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     option(WITH_PS2_TEST_RUNNER "Build PS2 on-screen MMI regression ELF" OFF)
     if(WITH_PS2_TEST_RUNNER)
-        # PS2 bench-only SPR entry point, never enabled in normal zlib-ng builds.
-        target_compile_definitions(zlib-ng PRIVATE PS2_SPR_BENCH)
         if(BUILD_SHARED_LIBS)
             message(FATAL_ERROR "PS2 test runner requires BUILD_SHARED_LIBS=OFF")
         endif()
@@ -237,7 +235,9 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     endif()
     if(WITH_MMI_CHORBA)
         list(APPEND _mmi_suite_tests chorba)
-        list(APPEND _mmi_suite_benches chorba chorba_copy)
+        list(APPEND _mmi_suite_benches chorba chorba_copy crc_poly)
+        # Benchmark-only MMI scatter engine, not linked into production zlib-ng.
+        target_sources(mmi_suite PRIVATE ps2/crc_poly_mmi.c)
     endif()
 
     foreach(_mmi_kernel IN LISTS _mmi_suite_tests)
@@ -260,7 +260,7 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
         target_compile_definitions(${_mmi_obj} PRIVATE
             "main=mmi_suite_bench_${_mmi_kernel}_main")
         if(WITH_PS2_TEST_RUNNER)
-            target_compile_definitions(${_mmi_obj} PRIVATE PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC PS2_SPR_BENCH)
+            target_compile_definitions(${_mmi_obj} PRIVATE PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC)
         endif()
         target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}>)
     endforeach()
