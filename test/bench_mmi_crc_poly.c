@@ -76,6 +76,26 @@ static clock_t timed(unsigned v, uint32_t seed,const uint8_t *p,size_t n,
         return (clock_t)-1;
     return stop-start;
 }
+/* Resolve the system clock before comparing short CRC32 inputs.  QUICK
+ * must not silently measure only six sub-tick calls at 128 B or 1 KiB.
+ * Calibration runs ordinary braid on exactly the same input and seed,
+ * outside all reported candidate timing samples. */
+static unsigned calibrated_reps(uint32_t seed, const uint8_t *p, size_t n)
+{
+    unsigned reps=ps2_bench_iterations(120u);
+    const unsigned cap=n<=1024u?2048u:n<=8192u?512u:
+                       n<=65536u?64u:n<=1048576u?8u:2u;
+    clock_t target=(clock_t)(CLOCKS_PER_SEC/500);
+    if(target<2)target=2;
+    if(reps==0u)reps=1u;
+    if(reps>cap)reps=cap;
+    while(reps<cap) {
+        clock_t t=timed(0u,seed,p,n,reps);
+        if(t>=target)break;
+        reps=reps>cap/2u?cap:reps*2u;
+    }
+    return reps;
+}
 static double median(const double *v)
 {
     double a[SAMPLES],x;
@@ -153,10 +173,7 @@ int main(void)
         }
         /* Identical repetitions for all candidates at this length;
          * rotate the order across samples to reduce temperature bias. */
-        unsigned reps=ps2_bench_iterations(120u);
-        if(reps==0)reps=1;
-        unsigned cap=n<=4096u?32u:n<=32768u?8u:1u;
-        if(reps>cap)reps=cap;
+        unsigned reps=calibrated_reps(seed,p,n);
         for(unsigned sample=0;sample<SAMPLES;sample++)
             for(unsigned step=0;step<CANDIDATES;step++){
                 unsigned v=(sample+step+offset)%CANDIDATES;
