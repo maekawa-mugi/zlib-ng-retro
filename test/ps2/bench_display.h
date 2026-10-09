@@ -1,6 +1,7 @@
 #ifndef PS2_BENCH_DISPLAY_H
 #define PS2_BENCH_DISPLAY_H
 #include <time.h>
+#include <stddef.h>
 #ifdef PS2_BENCH_SCREEN
 void ps2_bench_candidates(const char *name, const char *const *names,
                           unsigned count, int competitive);
@@ -15,12 +16,15 @@ void ps2_bench_poly_highlight(unsigned size_slot, const char *winner, double bra
 void ps2_bench_full(int full);
 unsigned ps2_bench_iterations(unsigned requested);
 void ps2_bench_case(const char *name, unsigned current, unsigned total);
+void ps2_bench_roundtrip_rate(unsigned pattern, unsigned level, size_t bytes,
+                              double compress_mb_s, double decode_mb_s);
 #else
 #define ps2_bench_pair(name, a, b) ((void)0)
 #define ps2_bench_candidates(name, names, count, competitive) ((void)0)
 #define ps2_bench_check(variant, ok) ((void)0)
 #define ps2_bench_ticks(variant, ticks) ((void)0)
 #define ps2_bench_case(name, current, total) ((void)0)
+#define ps2_bench_roundtrip_rate(p, level, bytes, compress, decode) ((void)0)
 #define ps2_bench_poly_highlight(size, winner, ratio) ((void)0)
 static inline unsigned ps2_bench_iterations(unsigned requested) { return requested; }
 #endif
