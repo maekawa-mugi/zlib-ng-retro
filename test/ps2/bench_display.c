@@ -24,6 +24,10 @@ static int screen_started, finished;
 static unsigned final_failures;
 static const char *poly_best[3];
 static double poly_speed[3];
+/* Last measured timings are reported PER condition, not across sizes. */
+static clock_t case_ticks[MMI_RANK_VARIANTS];
+static unsigned case_seen, case_number;
+
 
 /* Fixed GS coordinates; no newline/scrolling and no arbitrary diagnostic
  * strings at row 24. A full table is updated while tests and timing run. */
@@ -48,20 +52,24 @@ static void draw(void) {
             if (best >= 0) {
                 double ratio = g->v[best].ticks > 0 ?
                     g->v[0].ticks / g->v[best].ticks : 0.0;
-                scr_setfontcolor(GREEN);
+                scr_setfontcolor(WHITE);
                 scr_printf("%-15.15s %-16.16s %5.2fx    %-8s    ",
-                           g->name, g->v[best].name, ratio, "PASS");
+                           g->name, g->v[best].name, ratio, "");
+                scr_setXY(43,4+(int)i);
+                scr_setfontcolor(GREEN);
+                scr_printf("PASS");
+                scr_setfontcolor(WHITE);
             } else if (!g->competitive) {
                 scr_setfontcolor(WHITE);
                 scr_printf("%-15.15s %-16s %-9s %-8s     ",
                            g->name, "N/A", "--", "CHECKS");
             } else {
-                scr_setfontcolor(GRAY);
+                scr_setfontcolor(WHITE);
                 scr_printf("%-15.15s %-16s %-9s %-8s     ",
                            g->name, "PENDING", "--", "CHECKING");
             }
         } else {
-            scr_setfontcolor(GRAY);
+            scr_setfontcolor(WHITE);
             scr_printf("%-15s %-16s %-9s %-8s     ",
                        "--", "WAIT", "--", "WAIT");
         }
@@ -82,7 +90,7 @@ static void draw(void) {
     scr_printf("CORRECTNESS | PASS %3u | FAIL %3u      ",tests_ok,tests_failed);
     scr_setXY(0,21);
     if (first_failed) {
-        scr_setfontcolor(RED);
+        scr_setfontcolor(WHITE);
         scr_printf("FIRST FAIL: %-48.48s     ",first_failed);
     } else {
         scr_setfontcolor(WHITE);
@@ -93,11 +101,14 @@ static void draw(void) {
     scr_printf("CRC SIZE 1M %-15.15s %5.2fx  (all sizes on stdout)     ",
                poly_best[2]?poly_best[2]:"WAIT",poly_speed[2]);
     scr_setXY(0,23);
-    scr_setfontcolor(finished ? (final_failures ? RED : GREEN) : WHITE);
-    if (finished)
-        scr_printf("RESULT: %s | failed groups %u | %u ranked families     ",
-                   final_failures ? "FAIL" : "PASS",final_failures,rank_state.count);
-    else
+    scr_setfontcolor(WHITE);
+    if (finished) {
+        scr_printf("RESULT: %-4s | failed groups %u | %u ranked families     ",
+                   "",final_failures,rank_state.count);
+        scr_setXY(8,23);
+        scr_setfontcolor(final_failures?WHITE:GREEN);
+        scr_printf("%-4s",final_failures?"FAIL":"PASS");
+    } else
         scr_printf("RESULT: RUNNING | %u benchmark families registered       ",rank_state.count);
     scr_setXY(0,24);
     scr_setfontcolor(WHITE);
@@ -127,6 +138,7 @@ void ps2_bench_screen_init(void) {
 }
 void ps2_bench_progress(const char *name) {
     rank_state.active = -1;
+    case_number=case_seen=0;
     progress = name; case_progress[0] = 0; draw();
 }
 void ps2_bench_candidates(const char *name, const char *const *names,
@@ -147,6 +159,29 @@ void ps2_bench_check(unsigned i, int ok) {
 }
 void ps2_bench_ticks(unsigned i, clock_t ticks) {
     mmi_rank_ticks(&rank_state, i, ticks);
+    /* One exact condition has the same iteration count and input for all
+     * candidates. Emit its winner separately from mixed-size aggregates. */
+    if (case_number != 0 && rank_state.active >= 0) {
+        const mmi_rank_group *g=&rank_state.groups[rank_state.active];
+        if (i < g->count && i < MMI_RANK_VARIANTS) {
+            case_ticks[i]=ticks;
+            case_seen|=(1U<<i);
+            if (case_seen == (1U<<g->count)-1U) {
+                int best=mmi_rank_case_winner(g,case_ticks);
+                if (g->competitive && best>=0) {
+                    double ratio=(double)case_ticks[0]/(double)case_ticks[best];
+                    printf("MMI_CASE_WINNER,%s,%u,%s,%.4f,%ld,%ld\n",
+                           g->name,case_number,g->v[best].name,ratio,
+                           (long)case_ticks[0],(long)case_ticks[best]);
+                } else if (g->competitive) {
+                    printf("MMI_CASE_WINNER,%s,%u,UNDETERMINED\n",
+                           g->name,case_number);
+                }
+                case_seen=0;
+                case_number=0;
+            }
+        }
+    }
     clock_t now = clock();
     if (now == (clock_t)-1 || last_draw == (clock_t)-1 ||
         now - last_draw >= CLOCKS_PER_SEC / 4) { draw(); last_draw = now; }
@@ -157,6 +192,7 @@ void ps2_bench_finish(int rc) {
         if (rc) ++tests_failed; else ++tests_ok;
     }
     rank_state.active = -1;
+    case_number=case_seen=0;
     draw();
 }
 void ps2_bench_full(int full) { full_run = full != 0; }
@@ -167,6 +203,8 @@ unsigned ps2_bench_iterations(unsigned requested) {
 }
 void ps2_bench_case(const char *name, unsigned current, unsigned total) {
     snprintf(case_progress, sizeof(case_progress), "%s %u/%u", name, current, total);
+    case_number=current;
+    case_seen=0;
     clock_t now = clock();
     if (now == (clock_t)-1 || last_draw == (clock_t)-1 ||
         now - last_draw >= CLOCKS_PER_SEC / 4) {draw(); last_draw = now;}
