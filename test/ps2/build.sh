@@ -14,5 +14,5 @@ cmake -S "$source_dir" -B "$output_dir" \
     -DWITH_CRC32_CHORBA=ON -DBUILD_SHARED_LIBS=OFF \
     -DBUILD_TESTING=ON -DWITH_GTEST=OFF -DWITH_GZFILEOP=OFF \
     -DWITH_PS2_TEST_RUNNER=ON "$@"
-cmake --build "$output_dir" --target ps2_mmi_test mmi_suite -j "$build_jobs"
-printf '\nELFs: %s/zlib_ng_mmi_test_only.elf and %s/zlib_ng_mmi.elf (parallel jobs=%s)\n' "$output_dir" "$output_dir" "$build_jobs"
+cmake --build "$output_dir" --target mmi_suite -j "$build_jobs"
+printf '\nELF: %s/zlib_ng_mmi.elf (parallel jobs=%s; test-only omitted)\n' "$output_dir" "$build_jobs"
