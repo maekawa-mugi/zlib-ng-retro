@@ -29,6 +29,8 @@ add_test(NAME adler32_nmax COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FIL
 if(BASEARCH_MIPS_FOUND AND WITH_MMI)
     option(WITH_PS2_TEST_RUNNER "Build PS2 on-screen MMI regression ELF" OFF)
     if(WITH_PS2_TEST_RUNNER)
+        # PS2 bench-only SPR entry point, never enabled in normal zlib-ng builds.
+        target_compile_definitions(zlib-ng PRIVATE PS2_SPR_BENCH)
         if(BUILD_SHARED_LIBS)
             message(FATAL_ERROR "PS2 test runner requires BUILD_SHARED_LIBS=OFF")
         endif()
@@ -258,9 +260,9 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
         target_compile_definitions(${_mmi_obj} PRIVATE
             "main=mmi_suite_bench_${_mmi_kernel}_main")
         if(WITH_PS2_TEST_RUNNER)
-            target_compile_definitions(${_mmi_obj} PRIVATE PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC)
+            target_compile_definitions(${_mmi_obj} PRIVATE PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC PS2_SPR_BENCH)
         endif()
-        target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}>)
+        target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}> )
     endforeach()
 
     # The unified runner is intentionally NOT added to CTest by default:
