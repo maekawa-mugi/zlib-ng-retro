@@ -4,6 +4,7 @@
 #include "zbuild.h"
 #include "arch_functions.h"
 #include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include <time.h>
 #include "ps2/bench_display.h"
