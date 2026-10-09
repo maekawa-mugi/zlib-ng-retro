@@ -38,17 +38,22 @@ static int check(unsigned ao, unsigned bo, unsigned mismatch) {
     uint32_t got = compare256_mmi(left, right);
     uint32_t plain = compare256_mmi_plain(left, right);
     uint32_t swar = compare256_mmi_swar(left, right);
-    if (got != mismatch || plain != mismatch || swar != mismatch) {
-        printf("MMI compare256: FAIL ao=%u bo=%u mismatch=%u selected=%u plain=%u swar=%u\n",
-               ao, bo, mismatch, (unsigned)got, (unsigned)plain, (unsigned)swar);
+    uint32_t hybrid = compare256_mmi_hybrid16(left, right);
+    if (got != mismatch || plain != mismatch ||
+        swar != mismatch || hybrid != mismatch) {
+        printf("MMI compare256: FAIL ao=%u bo=%u mismatch=%u selected=%u plain=%u swar=%u hybrid=%u\n",
+               ao, bo, mismatch, (unsigned)got, (unsigned)plain,
+               (unsigned)swar,(unsigned)hybrid);
         return 1;
     }
 #ifdef MIPS_MMI_COMPARE64
     uint32_t prefilter = compare256_mmi_prefilter64(left, right);
+    uint32_t hybrid_pre64 = compare256_mmi_hybrid16_pre64(left,right);
     uint32_t pre32 = compare256_mmi_prefilter32(left, right);
     uint32_t pre32swar = compare256_mmi_prefilter32_swar(left, right);
     uint32_t prefilter_swar = compare256_mmi_prefilter64_swar(left, right);
-    if (prefilter != mismatch || prefilter_swar != mismatch ||
+    if (hybrid_pre64 != mismatch ||
+        prefilter != mismatch || prefilter_swar != mismatch ||
         pre32 != mismatch || pre32swar != mismatch) {
         printf("MMI compare256 prefilter: FAIL ao=%u bo=%u mismatch=%u byte=%u swar=%u\n",
                ao, bo, mismatch, (unsigned)prefilter, (unsigned)prefilter_swar);
