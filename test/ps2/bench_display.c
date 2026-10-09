@@ -21,8 +21,8 @@ static const char *first_failed;
 static int initialized;
 static int screen_started, finished;
 static unsigned final_failures;
-static double spr_highlight[3];
-static unsigned spr_seen[3];
+static const char *poly_best[3];
+static double poly_speed[3];
 
 /* Fixed GS coordinates; no newline/scrolling and no arbitrary diagnostic
  * strings at row 24. A full table is updated while tests and timing run. */
@@ -72,10 +72,9 @@ static void draw(void) {
     scr_printf("DETAIL %-55.55s   ",case_progress);
     scr_setXY(0,19);
     scr_setfontcolor(WHITE);
-    if(spr_seen[0] && spr_seen[1] && spr_seen[2])
-        scr_printf("RAM/SPR  Chorba:%4.2fx  Compare:%4.2fx  Adler:%4.2fx   ",
-                   spr_highlight[0],spr_highlight[1],spr_highlight[2]);
-    else scr_printf("SPR: running placement experiments (see stdout)       ");
+    scr_printf("CRC SIZE 4K %-15.15s %5.2fx | 64K %-12.12s %5.2fx      ",
+               poly_best[0]?poly_best[0]:"WAIT",poly_speed[0],
+               poly_best[1]?poly_best[1]:"WAIT",poly_speed[1]);
     scr_setXY(0,20);
     scr_printf("CORRECTNESS | PASS %3u | FAIL %3u      ",tests_ok,tests_failed);
     scr_setXY(0,21);
@@ -86,6 +85,10 @@ static void draw(void) {
         scr_setfontcolor(WHITE);
         scr_printf("First failure: none                                          ");
     }
+    scr_setXY(0,22);
+    scr_setfontcolor(WHITE);
+    scr_printf("CRC SIZE 1M %-15.15s %5.2fx  (all sizes on stdout)     ",
+               poly_best[2]?poly_best[2]:"WAIT",poly_speed[2]);
     scr_setXY(0,23);
     scr_setfontcolor(finished ? (final_failures ? RED : GREEN) : WHITE);
     if (finished)
@@ -98,10 +101,11 @@ static void draw(void) {
     scr_printf("%-54s","Detailed results: MMI_SUITE_* and MMI_* on stdout");
 }
 
-void ps2_bench_spr_highlight(unsigned family, double ram_over_spr) {
-    if(family>=3 || ram_over_spr<=0.0) return;
-    spr_highlight[family]=ram_over_spr;
-    spr_seen[family]=1;
+void ps2_bench_poly_highlight(unsigned size_slot, const char *winner,
+                              double braid_over_best) {
+    if(size_slot>=3 || braid_over_best<=0.0) return;
+    poly_best[size_slot]=winner;
+    poly_speed[size_slot]=braid_over_best;
     draw();
 }
 void ps2_bench_screen_init(void) {
