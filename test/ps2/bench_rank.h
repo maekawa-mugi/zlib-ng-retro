@@ -29,5 +29,9 @@ void mmi_rank_check(mmi_rank_state *s, unsigned variant, int ok);
 void mmi_rank_ticks(mmi_rank_state *s, unsigned variant, clock_t ticks);
 /* Return -1 if incomplete, mismatched, invalid clock, or incomparable. */
 int mmi_rank_winner(const mmi_rank_group *g);
+/* Never sum unrelated sizes/distances for a single-case winner.
+ * The caller passes one checked positive clock duration per contender. */
+int mmi_rank_case_winner(const mmi_rank_group *g,
+                         const clock_t ticks[MMI_RANK_VARIANTS]);
 void mmi_rank_report(const mmi_rank_group *g);
 #endif
