@@ -1,5 +1,22 @@
 # PS2SDK EE one-launch kernel tournament
 
+## Expanded one-launch scratchpad experiment matrix
+
+Chorba now has nine ranked candidates: the original six, spr_ring,
+spr_residue and spr_both. These isolate the 1024-byte scatter ring
+and 704-byte final residue in RAM or EE SPR, with the same CRC check.
+Compare256 also benchmarks genuine plain and prefilter64_swar MMI
+with RAM, first input in SPR, second in SPR, both, and copies inside
+the timed loop. Three alignments and six mismatch locations are covered.
+The additional stdout records are ZLIB_SPR_COMPARE and
+ZLIB_SPR_COMPARE_RESULT. No production dispatch changes.
+
+bash test/ps2/build.sh now builds ONLY build-ps2-mmi/zlib_ng_mmi.elf;
+it does not build ps2_mmi_test and removes stale
+build-ps2-mmi/zlib_ng_mmi_test_only.elf. The CMake target remains
+available for manual explicit builds, but is not part of this script.
+
+
 ## PS2 scratchpad CRC32 Chorba benchmark
 
 PS2 mmi_suite adds a seventh chorba competitor named spr_ring.
