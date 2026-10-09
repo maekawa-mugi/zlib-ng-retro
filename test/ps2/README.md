@@ -1,5 +1,62 @@
 # PS2SDK EE one-launch kernel tournament
 
+## October 2026: fairer R5900 A/B harness (branch ps2-ee-mmi)
+
+The on-screen table's **MIXED BEST** is the candidate with the lowest
+summed elapsed time over the runner's specified workload mix. This is
+**not** a general-purpose, per-input winner and is **not** a whole-stream
+zlib-versus-zlib-ng comparison. Each comparable benchmark condition now
+also emits `MMI_CASE_WINNER,<family>,<case_number>,<candidate>,<C_over_candidate>,<C_ticks>,<candidate_ticks>`.
+Invalid clocks and correctness failures are `UNDETERMINED`. Full raw
+per-variant timings remain on stdout. Compare cases by their existing
+length, alignment, mismatch and distance fields.
+
+`slide_hash` now benchmarks **four** candidates: independent scalar C
+(reference column zero), serial MMI, MMI two-load and MMI four-load.
+Its hash-table restoration is performed *outside* the measured function
+call; the current timer still incurs per-call `clock()` overhead, so
+small differences remain exploratory.
+
+`compare256` now benchmarks **nine** checked candidates: the former
+seven plus `hybrid16` and `hybrid16-64`. The two additional candidates
+compare the initial 16 bytes with safe 64-bit SWAR XOR before paying for
+MMI LQ/PXOR/SQ and optional 64-byte prefilter work. They are validated
+across every 0..256 mismatch index and all 16x16 alignment combinations
+by `test_mmi_compare256`. Neither changes production dispatch.
+
+The independent `roundtrip` phases are NOT ranked against one another.
+Each of 36 combinations (four patterns × 4/64/256 KiB × levels 1/6/9)
+now runs **six** alternating compression/decompression sample batches,
+reports a median elapsed tick count per phase and measures throughput
+using the **original byte count for both**:
+
+`MB/s = source_bytes * repetitions * CLOCKS_PER_SEC / median_ticks / 1000000`
+
+Each validated case emits `RT_CASE,zlib-ng-mmi-build,pattern,level,bytes,compressed_bytes,reps,compress_median_ticks,decode_median_ticks,compress_MBps,decode_MBps`.
+`RT_INVALID` explicitly marks invalid or coarse timer readings rather
+than inventing a throughput. The GS row 16 displays the latest
+`C MB/s` (compression) and `D MB/s` (decompression), in white with
+green restricted to the word PASS. The implementation label
+`zlib-ng-mmi-build` means the MMI-capable library was linked, **not**
+that every function took its MMI route.
+
+This is **not yet** a three-way original-zlib/zlib-ng-scalar/zlib-ng-MMI
+end-to-end A/B harness. To compare absolute PS2 performance across
+binaries, capture the `RT_CASE` CSV from identically configured scalar
+and MMI builds; a stock-zlib build must use the same pattern generator,
+level, input length, byte numerator and timer resolution. Cross-ELF
+decode comparisons should also use a common compressed stream when
+isolating pure decoder differences.
+
+Host numerical/rank tests:
+
+```sh
+sh test/ps2/test_rank_host.sh
+```
+
+All accelerated candidates are experimental until a real R5900 run
+shows correctness and a repeatable speed advantage.
+
 ## CRC32 zero-polynomial research (RAM-only)
 
 This branch keeps the integrated zlib_ng_mmi.elf harness and removes **all
@@ -78,9 +135,9 @@ shows selection coverage and `MMI_SUITE_COVERAGE` records it in stdout.
 
 The nine kernel competitions are:
 
-- `slide_hash`: serial / two-wide loads / four-wide loads
+- `slide_hash`: scalar C / serial / two-wide loads / four-wide loads
 - `compare256`: generic / 16-byte or 32-byte or 64-byte prefilter, with
-  bytewise or SWAR mismatch location
+  bytewise or SWAR mismatch location, plus SWAR-first hybrid16/64
 - `lz77_short`: generic / serial / 64-byte periodic store / 128-byte periodic store,
   only for distances 1, 2, 4, 8
 - `lz77_long`: generic / serial / four-wide load/store,
