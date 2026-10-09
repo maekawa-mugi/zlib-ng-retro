@@ -132,12 +132,17 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
 #ifdef PS2_SPR_BENCH
     /* EE SPR is 16 KiB at 0x70000000. Exclusive, synchronous benchmark
      * ownership is required; no DMA or other scratchpad users may run. */
-    if (use_spr)
+    if (use_spr & 1)
         ring = (uint8_t *)(uintptr_t)0x70000000u;
 #endif
     uint8_t value[16] ALIGNED_(16);
     uint8_t first[16] ALIGNED_(16);
-    uint8_t residue[CHORBA_MMI_RESIDUE] ALIGNED_(16);
+    uint8_t residue_local[CHORBA_MMI_RESIDUE] ALIGNED_(16);
+    uint8_t *residue = residue_local;
+#ifdef PS2_SPR_BENCH
+    if (use_spr & 2)
+        residue = (uint8_t *)(uintptr_t)0x70000400u;
+#endif
 
     memset(ring, 0, CHORBA_MMI_RING_BYTES);
     memcpy(first, buf, sizeof(first));
@@ -209,7 +214,7 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
     /* Starting with a zero raw CRC means passing ~0 as the public CRC.
      * The transformed stream has processed leading zero bytes, so only
      * its nonzero 704-byte residue contributes to the raw CRC. */
-    uint32_t residue_raw = ~crc32_braid(~0u, residue, sizeof(residue));
+    uint32_t residue_raw = ~crc32_braid(~0u, residue, CHORBA_MMI_RESIDUE);
     uint32_t result = ~chorba_mmi_unshift(residue_raw);
 
     /* Append the original unprocessed 0..15 byte suffix normally. */
@@ -228,6 +233,17 @@ Z_INTERNAL uint32_t crc32_chorba_mmi_spr_bench(uint32_t crc,
                                                const uint8_t *buf, size_t len) {
     return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL,
                                  CHORBA_MMI_THRESHOLD, 1);
+}
+/* Isolate the ring and residue working-set effects separately. */
+Z_INTERNAL uint32_t crc32_chorba_mmi_spr_residue_bench(uint32_t crc,
+                                               const uint8_t *buf, size_t len) {
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL,
+                                 CHORBA_MMI_THRESHOLD, 2);
+}
+Z_INTERNAL uint32_t crc32_chorba_mmi_spr_both_bench(uint32_t crc,
+                                               const uint8_t *buf, size_t len) {
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL,
+                                 CHORBA_MMI_THRESHOLD, 3);
 }
 #endif
 
