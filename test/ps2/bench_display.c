@@ -21,6 +21,8 @@ static const char *first_failed;
 static int initialized;
 static int screen_started, finished;
 static unsigned final_failures;
+static double spr_highlight[3];
+static unsigned spr_seen[3];
 
 /* Fixed GS coordinates; no newline/scrolling and no arbitrary diagnostic
  * strings at row 24. A full table is updated while tests and timing run. */
@@ -68,6 +70,12 @@ static void draw(void) {
     scr_printf("ACTIVE %-55.55s   ",progress);
     scr_setXY(0,18);
     scr_printf("DETAIL %-55.55s   ",case_progress);
+    scr_setXY(0,19);
+    scr_setfontcolor(WHITE);
+    if(spr_seen[0] && spr_seen[1] && spr_seen[2])
+        scr_printf("RAM/SPR  Chorba:%4.2fx  Compare:%4.2fx  Adler:%4.2fx   ",
+                   spr_highlight[0],spr_highlight[1],spr_highlight[2]);
+    else scr_printf("SPR: running placement experiments (see stdout)       ");
     scr_setXY(0,20);
     scr_printf("CORRECTNESS | PASS %3u | FAIL %3u      ",tests_ok,tests_failed);
     scr_setXY(0,21);
@@ -90,6 +98,12 @@ static void draw(void) {
     scr_printf("%-54s","Detailed results: MMI_SUITE_* and MMI_* on stdout");
 }
 
+void ps2_bench_spr_highlight(unsigned family, double ram_over_spr) {
+    if(family>=3 || ram_over_spr<=0.0) return;
+    spr_highlight[family]=ram_over_spr;
+    spr_seen[family]=1;
+    draw();
+}
 void ps2_bench_screen_init(void) {
     if (!initialized) { mmi_rank_reset(&rank_state); initialized = 1; }
     init_scr(); scr_setCursor(0); draw();
