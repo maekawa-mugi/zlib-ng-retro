@@ -14,6 +14,7 @@
 static mmi_rank_state rank_state;
 static const char *progress = "Starting";
 static char case_progress[96];
+static char roundtrip_summary[96] = "ROUNDTRIP MB/s: awaiting verified compress/decode";
 static unsigned tests_ok, tests_failed;
 static unsigned full_run;
 static clock_t last_draw;
@@ -66,6 +67,8 @@ static void draw(void) {
         }
     }
     scr_setfontcolor(WHITE);
+    scr_setXY(0,16);
+    scr_printf("%-70.70s",roundtrip_summary);
     scr_setXY(0,17);
     scr_printf("ACTIVE %-55.55s   ",progress);
     scr_setXY(0,18);
@@ -101,6 +104,16 @@ static void draw(void) {
     scr_printf("%-54s","Detailed results: MMI_SUITE_* and MMI_* on stdout");
 }
 
+void ps2_bench_roundtrip_rate(unsigned pattern, unsigned level, size_t bytes,
+                              double compress_mb_s, double decode_mb_s)
+{
+    /* Never present these independent phases as competing kernels. */
+    snprintf(roundtrip_summary,sizeof(roundtrip_summary),
+             "RT P%u L%u %luKiB | C %.2f MB/s | D %.2f MB/s",
+             pattern,level,(unsigned long)(bytes/1024U),
+             compress_mb_s,decode_mb_s);
+    draw();
+}
 void ps2_bench_poly_highlight(unsigned size_slot, const char *winner,
                               double braid_over_best) {
     if(size_slot>=3 || braid_over_best<=0.0) return;
