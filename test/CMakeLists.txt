@@ -262,7 +262,7 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
         if(WITH_PS2_TEST_RUNNER)
             target_compile_definitions(${_mmi_obj} PRIVATE PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC PS2_SPR_BENCH)
         endif()
-        target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}> )
+        target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}>)
     endforeach()
 
     # The unified runner is intentionally NOT added to CTest by default:
