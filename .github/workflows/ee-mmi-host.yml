@@ -1,5 +1,12 @@
 name: EE MMI host-side validation
 on:
+  push:
+    branches:
+      - ps2-ee-mmi
+    paths:
+      - "arch/mips/**"
+      - "test/**"
+      - ".github/workflows/ee-mmi-host.yml"
   pull_request:
     paths:
       - "arch/mips/**"
@@ -26,6 +33,14 @@ jobs:
         run: sh test/ps2/test-dispatch-selection-host.sh
       - name: CRC32 Chorba polynomial and inverse-model tests
         run: python3 test/gen_mmi_chorba.py
+      - name: CRC32 zero-polynomial host differential tests, O2 and O3
+        run: |
+          for opt in O2 O3; do
+            cc -std=c11 -"$opt" -Wall -Wextra -Werror -DCRC_POLY_HOST_TEST \
+              -o /tmp/test_crc_poly_host \
+              test/ps2/crc_poly_mmi.c test/ps2/test_crc_poly_host.c
+            /tmp/test_crc_poly_host
+          done
       - name: Check generic host CMake build still works
         run: |
           cmake -S . -B build-host -DWITH_GTEST=OFF \
