@@ -24,6 +24,12 @@
 
 #define CHORBA_MMI_RING_BYTES 1024u
 #define CHORBA_MMI_RING_MASK  (CHORBA_MMI_RING_BYTES - 1u)
+/* Only compiled into the PS2 benchmark library; production never uses SPR. */
+#ifdef PS2_SPR_BENCH
+#  define CHORBA_SPR_ARG , 0
+#else
+#  define CHORBA_SPR_ARG
+#endif
 #define CHORBA_MMI_RESIDUE    704u
 #ifndef MIPS_MMI_CHORBA_THRESHOLD
 #  define MIPS_MMI_CHORBA_THRESHOLD 4096u
@@ -94,7 +100,11 @@ static inline void chorba_mmi_xor_store_pair(uint8_t *first, uint8_t *second,
 
 static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
                                       size_t len, int paired, uint8_t *copydst,
-                                      size_t threshold) {
+                                      size_t threshold
+#ifdef PS2_SPR_BENCH
+                                      , int use_spr
+#endif
+                                      ) {
     size_t align = ((uintptr_t)buf & 15u);
     if (align != 0)
         align = 16u - align;
@@ -117,7 +127,14 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
     }
 
     const size_t processed = len & ~(size_t)15u;
-    uint8_t ring[CHORBA_MMI_RING_BYTES] ALIGNED_(16);
+    uint8_t ring_local[CHORBA_MMI_RING_BYTES] ALIGNED_(16);
+    uint8_t *ring = ring_local;
+#ifdef PS2_SPR_BENCH
+    /* EE SPR is 16 KiB at 0x70000000. Exclusive, synchronous benchmark
+     * ownership is required; no DMA or other scratchpad users may run. */
+    if (use_spr)
+        ring = (uint8_t *)(uintptr_t)0x70000000u;
+#endif
     uint8_t value[16] ALIGNED_(16);
     uint8_t first[16] ALIGNED_(16);
     uint8_t residue[CHORBA_MMI_RESIDUE] ALIGNED_(16);
@@ -204,14 +221,24 @@ static uint32_t crc32_chorba_mmi_impl(uint32_t crc, const uint8_t *buf,
     return result;
 }
 
+#ifdef PS2_SPR_BENCH
+/* Bench-only CRC path: same paired MMI scatter and threshold as RAM,
+ * but the 1024-byte working ring resides in the EE scratchpad. */
+Z_INTERNAL uint32_t crc32_chorba_mmi_spr_bench(uint32_t crc,
+                                               const uint8_t *buf, size_t len) {
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL,
+                                 CHORBA_MMI_THRESHOLD, 1);
+}
+#endif
+
 Z_INTERNAL uint32_t crc32_chorba_mmi_single(uint32_t crc, const uint8_t *buf,
                                              size_t len) {
-    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL, CHORBA_MMI_THRESHOLD);
+    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL, CHORBA_MMI_THRESHOLD CHORBA_SPR_ARG);
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi_paired(uint32_t crc, const uint8_t *buf,
                                              size_t len) {
-    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL, CHORBA_MMI_THRESHOLD);
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL, CHORBA_MMI_THRESHOLD CHORBA_SPR_ARG);
 }
 
 Z_INTERNAL uint32_t crc32_chorba_mmi(uint32_t crc, const uint8_t *buf, size_t len) {
@@ -229,9 +256,9 @@ static uint32_t crc32_chorba_mmi_at_threshold(uint32_t crc,
                                                 size_t len,
                                                 size_t threshold) {
 #ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
-    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL, threshold);
+    return crc32_chorba_mmi_impl(crc, buf, len, 1, NULL, threshold CHORBA_SPR_ARG);
 #else
-    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL, threshold);
+    return crc32_chorba_mmi_impl(crc, buf, len, 0, NULL, threshold CHORBA_SPR_ARG);
 #endif
 }
 
@@ -265,9 +292,9 @@ Z_INTERNAL uint32_t crc32_copy_chorba_mmi_twopass(uint32_t crc, uint8_t *dst,
 Z_INTERNAL uint32_t crc32_copy_chorba_mmi_fused(uint32_t crc, uint8_t *dst,
                                                  const uint8_t *src, size_t len) {
 #ifdef MIPS_MMI_CHORBA_PAIRED_TAPS
-    return crc32_chorba_mmi_impl(crc, src, len, 1, dst, CHORBA_MMI_THRESHOLD);
+    return crc32_chorba_mmi_impl(crc, src, len, 1, dst, CHORBA_MMI_THRESHOLD CHORBA_SPR_ARG);
 #else
-    return crc32_chorba_mmi_impl(crc, src, len, 0, dst, CHORBA_MMI_THRESHOLD);
+    return crc32_chorba_mmi_impl(crc, src, len, 0, dst, CHORBA_MMI_THRESHOLD CHORBA_SPR_ARG);
 #endif
 }
 
