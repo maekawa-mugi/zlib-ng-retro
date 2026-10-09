@@ -90,6 +90,8 @@ static int spr_bench_adler(void) {
                    names[k],(unsigned long)size,off,modes[mode],
                    (long)med[mode],(double)med[0]/med[mode]);
         }
+        if(k==1 && size==8192u && off==0 && med[1]>0)
+            ps2_bench_spr_highlight(2, (double)med[0]/med[1]);
     }
     puts("ZLIB_SPR_ADLER_RESULT,PASS,cases=16");
     return 0;
