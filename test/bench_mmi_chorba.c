@@ -13,6 +13,12 @@
 #endif
 
 #define MAX_BENCH (1024u * 1024u)
+#ifdef PS2_SPR_BENCH
+extern uint32_t crc32_chorba_mmi_spr_bench(uint32_t, const uint8_t *, size_t);
+#define CHORBA_VARIANTS 7
+#else
+#define CHORBA_VARIANTS 6
+#endif
 static uint8_t data[MAX_BENCH + 16] ALIGNED_(16);
 static volatile uint32_t keep_result;
 typedef uint32_t (*crc_func)(uint32_t, const uint8_t *, size_t);
@@ -33,8 +39,11 @@ static clock_t run(crc_func fn, const uint8_t *buf, size_t size,
 int main(void) {
     static const char *const names[] = {
         "braid", "single", "paired", "threshold1K", "threshold4K", "threshold8K"
+#ifdef PS2_SPR_BENCH
+        , "spr_ring"
+#endif
     };
-    ps2_bench_candidates("chorba", names, 6, 1);
+    ps2_bench_candidates("chorba", names, CHORBA_VARIANTS, 1);
     static const size_t sizes[] = {
         128, 1023, 1024, 1025, 2048, 4095, 4096, 4097,
         8191, 8192, 8193, 32768, 262144, MAX_BENCH
@@ -48,6 +57,9 @@ int main(void) {
         crc32_chorba_mmi_threshold1024,
         crc32_chorba_mmi_threshold4096,
         crc32_chorba_mmi_threshold8192
+#ifdef PS2_SPR_BENCH
+        , crc32_chorba_mmi_spr_bench
+#endif
     };
     uint32_t rng = 0x5a17e4b3u;
     for (unsigned i = 0; i < sizeof(data); ++i) {
@@ -56,7 +68,12 @@ int main(void) {
     }
     printf("MMI Chorba A/B CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("size offset count braid_ticks single_ticks paired_ticks t1024_ticks t4096_ticks t8192_ticks braid_over_single braid_over_paired braid_over_t1024 braid_over_t4096 braid_over_t8192");
+    puts("CRC32 bench: columns size offset reps, one ticks/variant, then braid/variant ratios");
+    puts("variant order: braid single paired threshold1K threshold4K threshold8K"
+#ifdef PS2_SPR_BENCH
+         " spr_ring"
+#endif
+         );
 
     for (unsigned i = 0; i < sizeof(sizes)/sizeof(sizes[0]); ++i)
         for (unsigned align = 0; align <= 1; ++align) {
@@ -76,30 +93,27 @@ int main(void) {
             }
             ps2_bench_check(0, 1);
             if (failed) return 1;
-            clock_t ticks[6];
+            clock_t ticks[CHORBA_VARIANTS];
             unsigned repetitions = ps2_bench_iterations(iterations[i]);
             if ((i + align) & 1u) {
-                for (int v = 5; v >= 0; --v)
+                for (int v = CHORBA_VARIANTS - 1; v >= 0; --v)
                     ticks[v] = run(variants[v], p, sizes[i], repetitions);
             } else {
-                for (unsigned v = 0; v < 6; ++v)
+                for (unsigned v = 0; v < CHORBA_VARIANTS; ++v)
                     ticks[v] = run(variants[v], p, sizes[i], repetitions);
             }
-            for (unsigned v = 0; v < 6; ++v) ps2_bench_ticks(v, ticks[v]);
-            if (ticks[0] <= 0 || ticks[1] <= 0 || ticks[2] <= 0 ||
-                ticks[3] <= 0 || ticks[4] <= 0 || ticks[5] <= 0) {
-                printf("%lu %u %u clock_unavailable_or_too_coarse\n",
-                       (unsigned long)sizes[i], align, repetitions);
-            } else {
-                printf("%lu %u %u %ld %ld %ld %ld %ld %ld %.3f %.3f %.3f %.3f %.3f\n",
-                       (unsigned long)sizes[i], align, repetitions,
-                       (long)ticks[0], (long)ticks[1], (long)ticks[2],
-                       (long)ticks[3], (long)ticks[4], (long)ticks[5],
-                       (double)ticks[0] / (double)ticks[1],
-                       (double)ticks[0] / (double)ticks[2],
-                       (double)ticks[0] / (double)ticks[3],
-                       (double)ticks[0] / (double)ticks[4],
-                       (double)ticks[0] / (double)ticks[5]);
+            for (unsigned v = 0; v < CHORBA_VARIANTS; ++v) ps2_bench_ticks(v, ticks[v]);
+            int valid = 1;
+            for (unsigned v = 0; v < CHORBA_VARIANTS; ++v)
+                if (ticks[v] <= 0) valid = 0;
+            printf("%lu %u %u", (unsigned long)sizes[i], align, repetitions);
+            if (!valid) puts(" clock_unavailable_or_too_coarse");
+            else {
+                for (unsigned v = 0; v < CHORBA_VARIANTS; ++v)
+                    printf(" %ld", (long)ticks[v]);
+                for (unsigned v = 1; v < CHORBA_VARIANTS; ++v)
+                    printf(" %.3f", (double)ticks[0] / (double)ticks[v]);
+                putchar('\n');
             }
         }
     printf("keep_result=%lu\n", (unsigned long)keep_result);
