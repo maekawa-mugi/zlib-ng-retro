@@ -106,13 +106,15 @@ int main(void) {
                         for (unsigned v = 0; v < count; ++v)
                             ticks[v] = bench(functions[v], dist, len, off, n);
                     }
+                    /* The rank reporter prints a separate CSV line.
+                     * Never call it while an LZ77_CASE row is unfinished. */
                     printf("LZ77_CASE,%s,%u,%u,%u", group ? "long" : "short",
                            dist, len, off);
-                    for (unsigned v = 0; v < count; ++v) {
-                        ps2_bench_ticks(v, ticks[v]);
+                    for (unsigned v = 0; v < count; ++v)
                         printf(",%ld", (long)ticks[v]);
-                    }
                     putchar('\n');
+                    for (unsigned v = 0; v < count; ++v)
+                        ps2_bench_ticks(v, ticks[v]);
                 }
     }
     printf("benchmark sink=%lu\n", (unsigned long)sink);
