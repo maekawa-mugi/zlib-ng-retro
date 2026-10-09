@@ -1,6 +1,6 @@
-/* Benchmark EE CRC32 Chorba plus memcpy against a one-pass copy schedule.
- * The same data is checked against CRC braid before each timing run.
- * clock() is approximate on PS2 Linux; prefer EE performance counters.
+/* Fair PS2 EE CRC32+copy competition: braid C+memcpy, MMI Chorba+memcpy,
+ * and fused MMI Chorba. A fused-vs-MMI-only result is not sufficient to
+ * establish an improvement over the production scalar checksum path.
  */
 #include "zbuild.h"
 #include "arch_functions.h"
@@ -9,7 +9,6 @@
 #include <string.h>
 #include <time.h>
 #include "ps2/bench_display.h"
-
 #ifndef MIPS_MMI_CHORBA
 #  error "Requires WITH_MMI_CHORBA=ON"
 #endif
@@ -28,14 +27,18 @@ static clock_t run(copy_fn fn, uint8_t *dst, const uint8_t *src,
         value ^= fn(i, dst, src, n) + i;
     clock_t end = clock();
     sink ^= value ^ dst[0];
-    if (begin == (clock_t)-1 || end == (clock_t)-1)
+    if (begin == (clock_t)-1 || end == (clock_t)-1 || end < begin)
         return (clock_t)-1;
     return end - begin;
 }
 
 int main(void) {
-    static const char *const names[] = {"two-pass", "fused"};
-    ps2_bench_candidates("chorba_copy", names, 2, 1);
+    static const char *const names[] = {"generic+copy", "mmi+copy", "fused"};
+    static const copy_fn variants[] = {
+        crc32_copy_braid, crc32_copy_chorba_mmi_twopass,
+        crc32_copy_chorba_mmi_fused
+    };
+    ps2_bench_candidates("chorba_copy", names, 3, 1);
     static const size_t lengths[] = {1024, 4096, 8192, 32768, MAX_BYTES};
     static const unsigned iters[] = {600, 300, 200, 60, 8};
     static const unsigned offsets[] = {0, 1, 7, 15};
@@ -44,10 +47,9 @@ int main(void) {
         rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
         source[i] = (uint8_t)rng;
     }
-
-    printf("MMI Chorba copy A/B CLOCKS_PER_SEC=%lu\n",
+    printf("MMI Chorba+copy three-way, CLOCKS_PER_SEC=%lu\n",
            (unsigned long)CLOCKS_PER_SEC);
-    puts("length src_offset dst_offset iterations twopass_ticks fused_ticks twopass_over_fused");
+    puts("length src_offset dst_offset iterations braid_ticks mmi_twopass_ticks fused_ticks braid_over_mmi braid_over_fused");
     for (unsigned li = 0; li < sizeof(lengths)/sizeof(lengths[0]); ++li)
         for (unsigned so = 0; so < sizeof(offsets)/sizeof(offsets[0]); ++so)
             for (unsigned di = 0; di < sizeof(offsets)/sizeof(offsets[0]); ++di) {
@@ -56,45 +58,39 @@ int main(void) {
                 const uint8_t *src = source + offsets[so];
                 uint8_t *dst = dest + offsets[di];
                 const uint32_t expected = crc32_braid(1u, src, n);
-                memset(dest, 0xa5, sizeof(dest));
-                uint32_t two = crc32_copy_chorba_mmi_twopass(1u, dst, src, n);
-                int ok_a = two == expected && memcmp(dst, src, n) == 0 && dst[n] == 0xa5u;
-                ps2_bench_check(0, ok_a);
-                if (!ok_a) {
-                    printf("Chorba two-pass FAIL len=%lu so=%u di=%u\n",
-                           (unsigned long)n, offsets[so], offsets[di]);
-                    /* Also check B below. */
+                int bad = 0;
+                for (unsigned v = 0; v < 3; ++v) {
+                    memset(dest, 0xa5, sizeof(dest));
+                    uint32_t actual = variants[v](1u, dst, src, n);
+                    int ok = actual == expected && memcmp(dst, src, n) == 0 &&
+                             dst[n] == 0xa5u;
+                    ps2_bench_check(v, ok);
+                    if (!ok) {
+                        printf("CRC+copy FAIL variant=%u n=%lu so=%u di=%u\n",
+                               v, (unsigned long)n, offsets[so], offsets[di]);
+                        bad = 1;
+                    }
                 }
-                memset(dest, 0xa5, sizeof(dest));
-                uint32_t fused = crc32_copy_chorba_mmi_fused(1u, dst, src, n);
-                int ok_b = fused == expected && memcmp(dst, src, n) == 0 && dst[n] == 0xa5u;
-                ps2_bench_check(1, ok_b);
-                if (!ok_b) {
-                    printf("Chorba fused FAIL len=%lu so=%u di=%u\n",
-                           (unsigned long)n, offsets[so], offsets[di]);
-                    return 1;
-                }
-
-                if (!ok_a || !ok_b) return 1;
-                clock_t a, b;
-                unsigned repetitions = ps2_bench_iterations(iters[li]);
+                if (bad) return 1;
+                clock_t ticks[3];
+                unsigned reps = ps2_bench_iterations(iters[li]);
                 if ((li + so + di) & 1u) {
-                    b = run(crc32_copy_chorba_mmi_fused, dst, src, n, repetitions);
-                    a = run(crc32_copy_chorba_mmi_twopass, dst, src, n, repetitions);
+                    for (int v = 2; v >= 0; --v)
+                        ticks[v] = run(variants[v], dst, src, n, reps);
                 } else {
-                    a = run(crc32_copy_chorba_mmi_twopass, dst, src, n, repetitions);
-                    b = run(crc32_copy_chorba_mmi_fused, dst, src, n, repetitions);
+                    for (unsigned v = 0; v < 3; ++v)
+                        ticks[v] = run(variants[v], dst, src, n, reps);
                 }
-                ps2_bench_ticks(0, a);
-                ps2_bench_ticks(1, b);
-                if (a <= 0 || b <= 0) {
+                for (unsigned v = 0; v < 3; ++v) ps2_bench_ticks(v, ticks[v]);
+                if (ticks[0] <= 0 || ticks[1] <= 0 || ticks[2] <= 0)
                     printf("%lu %u %u %u clock_unavailable_or_too_coarse\n",
-                           (unsigned long)n, offsets[so], offsets[di], repetitions);
-                } else {
-                    printf("%lu %u %u %u %ld %ld %.3f\n",
-                           (unsigned long)n, offsets[so], offsets[di], repetitions,
-                           (long)a, (long)b, (double)a / (double)b);
-                }
+                           (unsigned long)n, offsets[so], offsets[di], reps);
+                else
+                    printf("%lu %u %u %u %ld %ld %ld %.3f %.3f\n",
+                           (unsigned long)n, offsets[so], offsets[di], reps,
+                           (long)ticks[0], (long)ticks[1], (long)ticks[2],
+                           (double)ticks[0]/(double)ticks[1],
+                           (double)ticks[0]/(double)ticks[2]);
             }
     printf("benchmark sink=%lu\n", (unsigned long)sink);
     return 0;

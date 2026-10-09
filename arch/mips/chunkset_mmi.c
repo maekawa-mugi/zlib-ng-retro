@@ -213,6 +213,14 @@ Z_INTERNAL uint8_t *chunkmemset_safe_mmi(uint8_t *out, uint8_t *from,
 #elif defined(MIPS_MMI_CHUNKSET_BURST)
     return chunkmemset_safe_mmi_burst(out, from, len, left);
 #else
+    /* EE quick benchmarks: C wins for LZ77 distance 1/2/4/8, while
+     * serial LQ/SQ wins for distance >=64. Do not assume the unmeasured
+     * 9..63-byte region also benefits from MMI. For small lengths the
+     * dispatch and scalar-peel overhead exceeds a useful vector batch. */
+    const uintptr_t dst = (uintptr_t)out;
+    const uintptr_t src = (uintptr_t)from;
+    if (dst <= src || dst - src < 64u || MIN(len, left) < 64u)
+        return chunkmemset_safe_c(out, from, len, left);
     return chunkmemset_safe_mmi_serial(out, from, len, left);
 #endif
 }

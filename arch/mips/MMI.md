@@ -5,6 +5,32 @@ sliding, match comparison, and selected inflate history copies**, using
 128-bit `LQ`, `SQ`, `PSUBUH`, and `PXOR` instructions. This is not MIPS
 MSA, and must never be enabled for generic MIPS CPUs.
 
+## Production dispatch after the first EE measurements
+
+The single-ELF candidate tournament showed generic C winning compare256,
+Adler32 and braid CRC32 for its quick workloads. Therefore
+`WITH_MMI=ON` **builds** MMI candidates but does not automatically replace
+these three generic production functions. The same applies to checksum
+copy until it beats generic+memcpy, not just MMI+memcpy.
+
+Production opt-ins, all default OFF, are:
+
+- `WITH_MMI_COMPARE256_DISPATCH` (also enables MMI longest_match)
+- `WITH_MMI_ADLER32_DISPATCH`, `WITH_MMI_ADLER32_COPY_DISPATCH`
+- `WITH_MMI_CHORBA_DISPATCH`, `WITH_MMI_CHORBA_COPY_DISPATCH`
+
+The selected default `chunkmemset_safe_mmi` dispatch uses generic C for
+history distances under 64 bytes and copies shorter than 64 bytes; for
+longer backwards history distances it calls the winning serial MMI
+implementation, which itself guards alignment and overlap. Explicit
+burst/pattern production switches still override this policy.
+
+The Adler and Chorba copy benchmarks now each compare **three** strategies:
+generic checksum + `memcpy`, MMI checksum + `memcpy`, and one-pass MMI
+checksum/copy. Their first candidate is the real generic baseline.
+The quick rankings do not establish end-to-end performance; repeat full
+compress/inflate experiments before opting in to production switches.
+
 ## Scope
 
 - `slide_hash_mmi`: update both `head` and `prev` hash chains.

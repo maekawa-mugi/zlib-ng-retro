@@ -22,6 +22,8 @@ jobs:
           cc -std=c11 -O2 -Wall -Wextra -Werror \
             -o /tmp/test_mmi_adler_math test/test_mmi_adler32_math.c
           /tmp/test_mmi_adler_math
+      - name: Verify opt-in MMI native dispatch routing
+        run: sh test/ps2/test-dispatch-selection-host.sh
       - name: CRC32 Chorba polynomial and inverse-model tests
         run: python3 test/gen_mmi_chorba.py
       - name: Check generic host CMake build still works
@@ -29,3 +31,11 @@ jobs:
           cmake -S . -B build-host -DWITH_GTEST=OFF \
             -DBUILD_TESTING=OFF -DWITH_MMI=OFF
           cmake --build build-host --target zlib-ng
+      - name: Cross-target MMI C API syntax with host parser
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -fsyntax-only -I. -Ibuild-host \
+            -DPS2_BENCH_SCREEN -DMIPS_MMI -DMIPS_FEATURES \
+            -DMIPS_MMI_ADLER32 -DMIPS_MMI_CHORBA \
+            -DDISABLE_RUNTIME_CPU_DETECTION \
+            test/bench_mmi_adler32_copy.c test/bench_mmi_chorba_copy.c \
+            arch/mips/chunkset_mmi.c

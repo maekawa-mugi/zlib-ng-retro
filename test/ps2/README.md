@@ -24,9 +24,9 @@ The eight kernel competitions are:
 - `lz77_long`: generic / serial / four-wide load/store,
   only for distances at least 64
 - `adler32`: generic / prefix / weighted-formula
-- `adler32_copy`: two-pass / fused
+- `adler32_copy`: generic C+copy / MMI+copy / fused MMI
 - `chorba`: braid / single tap / paired tap / thresholds 1024, 4096, 8192
-- `chorba_copy`: two-pass / fused
+- `chorba_copy`: braid C+copy / MMI+copy / fused MMI
 
 Whole-stream `roundtrip` validates compression and decompression with full
 output comparison, **not** against each other as competing candidates.
@@ -54,6 +54,20 @@ corresponding option. New switches are `WITH_MMI_COMPARE32=ON` (requires
 `WITH_MMI_CHUNKSET_PATTERN128=ON` (requires
 `WITH_MMI_CHUNKSET_PATTERN=ON`). The normal test ELF always links every
 variant, independent of the selected production dispatcher.
+
+Production selection is now **independent of candidate compilation**.
+`WITH_MMI=ON` keeps the tested serial MMI long-distance (>=64-byte) LZ77
+copy path, but routes short and unmeasured distances through generic C.
+The quick EE measurements favored C for compare256, Adler32 and CRC32, so
+their production selection defaults to generic even with MMI kernels built.
+After full-stream measurements, explicit opt-ins are
+`WITH_MMI_COMPARE256_DISPATCH=ON` (includes longest_match),
+`WITH_MMI_ADLER32_DISPATCH=ON`, `WITH_MMI_ADLER32_COPY_DISPATCH=ON`,
+`WITH_MMI_CHORBA_DISPATCH=ON`, and `WITH_MMI_CHORBA_COPY_DISPATCH=ON`.
+For fused production copy also set the matching `_FUSED_COPY=ON` flag.
+The new three-way copy benchmark tests the scalar+memcpy baseline; older
+1.52x/1.44x fused wins were only against MMI+memcpy and are not proof
+of a win over C+memcpy.
 
 The EE Core User Manual's latency section describes loads as 1-cycle under
 cache hits but warns that immediate load-use dependencies can interlock, and

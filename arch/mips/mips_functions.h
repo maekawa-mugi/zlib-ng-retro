@@ -77,29 +77,40 @@ uint32_t longest_match_slow_roll_mmi(deflate_state *const s, uint32_t cur_match)
 
 #ifdef DISABLE_RUNTIME_CPU_DETECTION
 // PS2 EE - MMI
-#  if defined(MIPS_MMI_CHORBA) && defined(MIPS_MMI_NATIVE)
+/* Kernel availability is independent from production selection. Quick EE
+ * measurements favored C for comparison and checksums; leave these routes
+ * generic unless deliberately opted in after representative stream tests. */
+#  if defined(MIPS_MMI_CHORBA_DISPATCH) && defined(MIPS_MMI_NATIVE)
 #    undef native_crc32
 #    define native_crc32 crc32_chorba_mmi
+#  endif
+#  if defined(MIPS_MMI_CHORBA_COPY_DISPATCH) && defined(MIPS_MMI_NATIVE)
 #    undef native_crc32_copy
 #    define native_crc32_copy crc32_copy_chorba_mmi
 #  endif
-#  ifdef MIPS_MMI_ADLER32_NATIVE
+#  if defined(MIPS_MMI_ADLER32_NATIVE) && defined(MIPS_MMI_ADLER32_DISPATCH)
 #    undef native_adler32
 #    define native_adler32 adler32_mmi
+#  endif
+#  if defined(MIPS_MMI_ADLER32_NATIVE) && defined(MIPS_MMI_ADLER32_COPY_DISPATCH)
 #    undef native_adler32_copy
 #    define native_adler32_copy adler32_copy_mmi
 #  endif
 #  ifdef MIPS_MMI_NATIVE
 #    undef native_chunkmemset_safe
 #    define native_chunkmemset_safe chunkmemset_safe_mmi
-#    undef native_compare256
-#    define native_compare256 compare256_mmi
-#    undef native_longest_match
-#    define native_longest_match longest_match_mmi
-#    undef native_longest_match_slow_knuth
-#    define native_longest_match_slow_knuth longest_match_slow_knuth_mmi
-#    undef native_longest_match_slow_roll
-#    define native_longest_match_slow_roll longest_match_slow_roll_mmi
+#    ifdef MIPS_MMI_COMPARE256_DISPATCH
+#      undef native_compare256
+#      define native_compare256 compare256_mmi
+/* longest_match_mmi invokes compare256_mmi internally: route the match
+ * search and its comparator together, never a mix of benchmark winners. */
+#      undef native_longest_match
+#      define native_longest_match longest_match_mmi
+#      undef native_longest_match_slow_knuth
+#      define native_longest_match_slow_knuth longest_match_slow_knuth_mmi
+#      undef native_longest_match_slow_roll
+#      define native_longest_match_slow_roll longest_match_slow_roll_mmi
+#    endif
 #    undef native_slide_hash
 #    define native_slide_hash slide_hash_mmi
 #    undef native_slide_hash_head
