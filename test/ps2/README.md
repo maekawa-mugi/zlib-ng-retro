@@ -5,6 +5,10 @@
 Chorba now has nine ranked candidates: the original six, spr_ring,
 spr_residue and spr_both. These isolate the 1024-byte scatter ring
 and 704-byte final residue in RAM or EE SPR, with the same CRC check.
+Adler-32 additionally tests genuine prefix/formula MMI checksum kernels
+on RAM, preloaded SPR, and copy-inclusive SPR for 64/1024/8192/
+16368-byte inputs, aligned and offset by one byte. Output records:
+ZLIB_SPR_ADLER and ZLIB_SPR_ADLER_RESULT.
 Compare256 also benchmarks genuine plain and prefilter64_swar MMI
 with RAM, first input in SPR, second in SPR, both, and copies inside
 the timed loop. Three alignments and six mismatch locations are covered.
