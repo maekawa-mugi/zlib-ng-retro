@@ -108,6 +108,8 @@ static int compare_spr_bench(void) {
                    names[k],off,mismatch,modes[v],(long)med[v],
                    med[v]>0?(double)med[0]/med[v]:0.0);
         }
+        if(k==1 && off==0 && mismatch==256 && med[3]>0)
+            ps2_bench_spr_highlight(1, (double)med[0]/med[3]);
     }
     puts("ZLIB_SPR_COMPARE_RESULT,PASS,cases=36");
     return 0;
