@@ -55,6 +55,8 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -fsyntax-only -I. -Ibuild-host \
             -DPS2_BENCH_SCREEN -DMIPS_MMI -DMIPS_FEATURES \
             -DMIPS_MMI_ADLER32 -DMIPS_MMI_CHORBA \
-            -DDISABLE_RUNTIME_CPU_DETECTION \
+            -DDISABLE_RUNTIME_CPU_DETECTION -DMIPS_MMI_COMPARE64 \
             test/bench_mmi_adler32_copy.c test/bench_mmi_chorba_copy.c \
-            arch/mips/chunkset_mmi.c
+            test/bench_mmi_roundtrip.c test/bench_mmi_slide_hash.c \
+            test/bench_mmi_compare256.c \
+            arch/mips/chunkset_mmi.c arch/mips/compare256_mmi.c
