@@ -15,4 +15,6 @@ cmake -S "$source_dir" -B "$output_dir" \
     -DBUILD_TESTING=ON -DWITH_GTEST=OFF -DWITH_GZFILEOP=OFF \
     -DWITH_PS2_TEST_RUNNER=ON "$@"
 cmake --build "$output_dir" --target mmi_suite -j "$build_jobs"
+# Remove leftovers from older two-ELF builds, not user-created files.
+rm -f "$output_dir/zlib_ng_mmi_test_only.elf"
 printf '\nELF: %s/zlib_ng_mmi.elf (parallel jobs=%s; test-only omitted)\n' "$output_dir" "$build_jobs"
