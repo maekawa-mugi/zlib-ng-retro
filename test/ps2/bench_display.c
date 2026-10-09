@@ -40,10 +40,10 @@ static void draw(void) {
     scr_setfontcolor(WHITE); scr_setXY(0,0);
     scr_printf("ZLIB-NG RETRO | PS2 EE MMI | VALIDATION + BENCHMARK");
     scr_setXY(0,1);
-    scr_printf("Mode: %-5s | every winner requires passed checks + timing",
+    scr_printf("Mode: %-5s | MIXED best is time-weighted; per-case CSV",
                full_run ? "FULL" : "QUICK");
     scr_setXY(0,2);
-    scr_printf("%-15s %-16s %-9s %s", "FUNCTION", "PROVISIONAL BEST", "SPEED", "STATE");
+    scr_printf("%-15s %-16s %-9s %s", "FUNCTION", "MIXED BEST", "SPEED", "STATE");
     for (i = 0; i < MMI_RANK_GROUPS; ++i) {
         scr_setXY(0,4+(int)i);
         if (i < rank_state.count) {
