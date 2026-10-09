@@ -2,7 +2,7 @@
 #define PS2_BENCH_RANK_H
 #include <time.h>
 #define MMI_RANK_GROUPS 12
-#define MMI_RANK_VARIANTS 8
+#define MMI_RANK_VARIANTS 12
 
 typedef struct {
     const char *name;
