@@ -1,5 +1,22 @@
 # PS2SDK EE one-launch kernel tournament
 
+## PS2 scratchpad CRC32 Chorba benchmark
+
+PS2 mmi_suite adds a seventh chorba competitor named spr_ring.
+It uses paired ten-tap EE MMI XOR scatter with the 1,024-byte ring
+at 0x70000000 in the EE 16 KiB scratchpad instead of on the stack.
+All sizes and offsets are validated against crc32_braid before timing.
+Short sizes may use braid fallback, so look at the large-size results.
+Timing includes ring clearing and residue reduction; it excludes DMA
+(there is no DMA). It is benchmark-only and not production dispatch.
+
+Build as usual: bash test/ps2/build.sh
+Run zlib_ng_mmi.elf, preferably using --full for the detailed test.
+Capture MMI_CANDIDATE,chorba and MMI_WINNER,chorba records.
+The run must have exclusive SPR ownership and no concurrent SPR/DMA
+user. Neither the cross-build nor hardware timing has been verified.
+
+
 **No ELF arguments are required.** Running `mmi_suite.elf` selects the
 nonduplicated integrated validation, executes all enabled A/B/C kernels,
 prints a verified fastest candidate per *comparable workload* and keeps the
