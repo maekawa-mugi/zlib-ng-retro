@@ -11,6 +11,7 @@ void ps2_bench_screen_init(void);
 void ps2_bench_progress(const char *name);
 void ps2_bench_finish(int rc);
 void ps2_bench_screen_done(unsigned failed);
+void ps2_bench_spr_highlight(unsigned family, double ram_over_spr);
 void ps2_bench_full(int full);
 unsigned ps2_bench_iterations(unsigned requested);
 void ps2_bench_case(const char *name, unsigned current, unsigned total);
@@ -20,6 +21,7 @@ void ps2_bench_case(const char *name, unsigned current, unsigned total);
 #define ps2_bench_check(variant, ok) ((void)0)
 #define ps2_bench_ticks(variant, ticks) ((void)0)
 #define ps2_bench_case(name, current, total) ((void)0)
+#define ps2_bench_spr_highlight(family, ratio) ((void)0)
 static inline unsigned ps2_bench_iterations(unsigned requested) { return requested; }
 #endif
 #endif
