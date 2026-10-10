@@ -17,6 +17,7 @@ def parse(path):
     cases = {}
     invalid = []
     version = set()
+    result_seen = 0
     for lineno, raw in enumerate(pathlib.Path(path).read_text(
             encoding="utf-8", errors="replace").splitlines(), 1):
         for kind in ("RT_CASE,", "RT_INVALID,", "RT_RESULT,"):
@@ -32,6 +33,9 @@ def parse(path):
         if row[0] == "RT_RESULT":
             if len(row) < 2 or row[1] != "PASS":
                 raise ValueError(f"{path}:{lineno}: incomplete or failed RT_RESULT")
+            result_seen += 1
+            if result_seen > 1:
+                raise ValueError(f"{path}:{lineno}: duplicate RT_RESULT")
             continue
         if len(row) != 11:
             raise ValueError(f"{path}:{lineno}: expected 11 RT_CASE fields, got {len(row)}")
@@ -43,6 +47,8 @@ def parse(path):
             label, int(pattern), int(level), int(size), int(packed),
             int(reps), float(ct), float(dt), float(cr), float(dr))))
         version.add(label)
+    if result_seen != 1:
+        raise ValueError(f"{path}: missing final RT_RESULT PASS")
     if invalid:
         raise ValueError(f"{path}: {len(invalid)} invalid timing cases")
     if len(cases) != 36:
