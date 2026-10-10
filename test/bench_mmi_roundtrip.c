@@ -2,11 +2,22 @@
  * Cross-build the same source and flags with individual WITH_MMI_* A/B
  * switches. Timing uses clock(); EE performance counters are preferable.
  */
-#include "zbuild.h"
-#ifdef ZLIB_COMPAT
-#  include "zlib.h"
+/* Both PS2 ELFs compile THIS exact benchmark source. The stock build
+ * links the unmodified vendored zlib 1.3.2; the other links zlib-ng MMI.
+ * Keeping input generation/timing here prevents benchmark drift. */
+#ifdef PS2_STOCK_ZLIB
+#  include "third_party/zlib-1.3.2/zlib.h"
+   typedef uLongf z_uintmax_t;
+#  define PREFIX(name) name
+#  define RT_IMPL_NAME "zlib-1.3.2"
 #else
-#  include "zlib-ng.h"
+#  include "zbuild.h"
+#  ifdef ZLIB_COMPAT
+#    include "zlib.h"
+#  else
+#    include "zlib-ng.h"
+#  endif
+#  define RT_IMPL_NAME "zlib-ng-mmi"
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -17,8 +28,8 @@
 #include "ps2/roundtrip_metrics.h"
 #include "ps2/stress_diagnostic.h"
 
-#ifndef MIPS_MMI
-#  error "Build with WITH_MMI=ON"
+#if !defined(MIPS_MMI) && !defined(PS2_STOCK_ZLIB)
+#  error "Build zlib-ng benchmark with WITH_MMI=ON"
 #endif
 #define MAX_BENCH (256u * 1024u)
 static uint8_t input[MAX_BENCH];
@@ -61,8 +72,8 @@ int main(void) {
                         (unsigned long)capacity);
         return 1;
     }
-    printf("RT_META,zlib-ng-mmi-build,%lu,%u,uncompressed_MB/s,clock()\n",
-           (unsigned long)CLOCKS_PER_SEC,PS2_ROUNDTRIP_SAMPLES);
+    printf("RT_META,%s,%lu,%u,uncompressed_MB/s,clock()\n",
+           RT_IMPL_NAME,(unsigned long)CLOCKS_PER_SEC,PS2_ROUNDTRIP_SAMPLES);
     puts("RT_HEADER,implementation,pattern,level,input_bytes,compressed_bytes,"
          "repetitions,compress_ticks_median,decode_ticks_median,"
          "compress_MBps,decode_MBps");
@@ -84,7 +95,7 @@ int main(void) {
                 ps2_bench_check(0, status == Z_OK);
                 if (status != Z_OK) {
                     mmi_stress_fail("RT_FAIL,compress_reference,%u,%d,%lu,%d\n",
-                                    pattern,level,(unsigned long)len,status);
+                                    RT_IMPL_NAME,pattern,level,(unsigned long)len,status);
                     outcome = 1; break;
                 }
                 status = PREFIX(uncompress)(unpacked,&decoded,packed,used);
@@ -158,7 +169,7 @@ int main(void) {
                 rate_d=ps2_roundtrip_mb_s(len,count,med_d);
                 ps2_bench_ticks(0,(clock_t)med_c);
                 ps2_bench_ticks(1,(clock_t)med_d);
-                printf("RT_CASE,zlib-ng-mmi-build,%u,%d,%lu,%lu,%u,"
+                printf("RT_CASE,%s,%u,%d,%lu,%lu,%u,"
                        "%.3f,%.3f,%.6f,%.6f\n",
                        pattern,level,(unsigned long)len,
                        (unsigned long)used,count,med_c,med_d,rate_c,rate_d);
