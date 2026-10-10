@@ -6,11 +6,13 @@ on:
     paths:
       - "arch/mips/**"
       - "test/**"
+      - "third_party/zlib-1.3.2/**"
       - ".github/workflows/ee-mmi-host.yml"
   pull_request:
     paths:
       - "arch/mips/**"
       - "test/**"
+      - "third_party/zlib-1.3.2/**"
       - ".github/workflows/ee-mmi-host.yml"
   workflow_dispatch:
 
@@ -45,6 +47,8 @@ jobs:
           done
       - name: Verify rank scope and whole-stream MB/s helpers
         run: sh test/ps2/test_rank_host.sh
+      - name: Compile original zlib 1.3.2 and verify all 36 shared benchmark cases
+        run: sh test/ps2/test_stock_zlib_host.sh
       - name: Check generic host CMake build still works
         run: |
           cmake -S . -B build-host -DWITH_GTEST=OFF \
