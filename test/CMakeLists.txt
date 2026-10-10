@@ -265,6 +265,39 @@ if(BASEARCH_MIPS_FOUND AND WITH_MMI)
         target_sources(mmi_suite PRIVATE $<TARGET_OBJECTS:${_mmi_obj}>)
     endforeach()
 
+    # Completely separate ELF: original, unmodified zlib 1.3.2 sources.
+    # Its only benchmark is the same 36-case source compiled for mmi_suite.
+    # Keeping libraries in distinct executables avoids ABI/symbol collisions.
+    if(WITH_PS2_TEST_RUNNER)
+        set(_stock_dir "${PROJECT_SOURCE_DIR}/third_party/zlib-1.3.2")
+        set(_stock_core
+            adler32.c crc32.c compress.c uncompr.c deflate.c inflate.c
+            inftrees.c inffast.c trees.c zutil.c)
+        list(TRANSFORM _stock_core PREPEND "${_stock_dir}/")
+        add_library(ps2_stock_zlib STATIC ${_stock_core})
+        target_include_directories(ps2_stock_zlib PRIVATE "${_stock_dir}")
+
+        add_library(ps2_stock_roundtrip_obj OBJECT bench_mmi_roundtrip.c)
+        target_include_directories(ps2_stock_roundtrip_obj PRIVATE
+            "${PROJECT_SOURCE_DIR}" "${_stock_dir}")
+        target_compile_definitions(ps2_stock_roundtrip_obj PRIVATE
+            PS2_STOCK_ZLIB PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC
+            "main=ps2_stock_roundtrip_main")
+
+        add_executable(ps2_original_zlib
+            ps2/stock_zlib_main.c ps2/bench_display.c
+            ps2/bench_rank.c ps2/stress_diagnostic.c
+            $<TARGET_OBJECTS:ps2_stock_roundtrip_obj>)
+        target_include_directories(ps2_original_zlib PRIVATE
+            "${PROJECT_SOURCE_DIR}" "${_stock_dir}")
+        target_compile_definitions(ps2_original_zlib PRIVATE
+            PS2_STOCK_ZLIB PS2_BENCH_SCREEN PS2_STRESS_DIAGNOSTIC)
+        target_link_libraries(ps2_original_zlib PRIVATE ps2_stock_zlib -ldebug)
+        set_target_properties(ps2_original_zlib PROPERTIES
+            OUTPUT_NAME "zlib_original" SUFFIX ".elf"
+            RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+    endif()
+
     # The unified runner is intentionally NOT added to CTest by default:
     # normal cross-builds lack a PS2 Linux emulator, and standalone tests
     # are already registered. Execute the binary with --all on hardware.
