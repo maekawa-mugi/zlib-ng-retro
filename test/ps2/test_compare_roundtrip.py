@@ -32,7 +32,7 @@ def main():
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             compare(left, right)
-        assert out.getvalue().count("\n") == 40
+        assert out.getvalue().count("\n") == 41
         assert ",2.000," in out.getvalue()
         original = right.read_text()
         right.write_text(original.replace("RT_RESULT,PASS", "RT_RESULT,PARTIAL"))
