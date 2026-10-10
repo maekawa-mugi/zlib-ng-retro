@@ -38,10 +38,19 @@ static void draw(void) {
         screen_started = 1;
     }
     scr_setfontcolor(WHITE); scr_setXY(0,0);
+#ifdef PS2_STOCK_ZLIB
+    scr_printf("ZLIB 1.3.2 ORIGINAL | PS2 EE | ROUNDTRIP BENCHMARK");
+#else
     scr_printf("ZLIB-NG RETRO | PS2 EE MMI | VALIDATION + BENCHMARK");
+#endif
     scr_setXY(0,1);
+#ifdef PS2_STOCK_ZLIB
+    scr_printf("Mode: %-5s | 36 identical patterns/levels | RT_CASE CSV",
+               full_run ? "FULL" : "QUICK");
+#else
     scr_printf("Mode: %-5s | MIXED best is time-weighted; per-case CSV",
                full_run ? "FULL" : "QUICK");
+#endif
     scr_setXY(0,2);
     scr_printf("%-15s %-16s %-9s %s", "FUNCTION", "MIXED BEST", "SPEED", "STATE");
     for (i = 0; i < MMI_RANK_GROUPS; ++i) {
