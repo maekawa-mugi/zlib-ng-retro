@@ -1,4 +1,81 @@
-# PS2SDK EE one-launch kernel tournament
+# PS2SDK EE two-ELF original zlib vs zlib-ng MMI comparison
+
+## Original zlib 1.3.2 vs zlib-ng MMI: identical end-to-end harness
+
+`bash test/ps2/build.sh` now produces **TWO standalone EE binaries**,
+without symbol interposition or mixing implementations:
+
+- `build-ps2-mmi/zlib_ng_mmi.elf`: existing complete 17-suite R5900
+  kernel validation/tournament and 36-case zlib-ng MMI roundtrip.
+- `build-ps2-mmi/zlib_original.elf`: unmodified official zlib **1.3.2**
+  compressor/decompressor with exactly the same roundtrip benchmark source,
+  36 pattern/size/level conditions, six rotating-order samples, median and
+  original-byte MB/s calculation, and a distinct on-screen title.
+
+The 21 required **pristine original zlib source files** are vendored in
+`third_party/zlib-1.3.2/` along with the original LICENSE. Their Git
+blob SHA-1 values match both the user's `zlib-1.3.2.tar.gz` and the
+official upstream `madler/zlib` `v1.3.2` tag. This is the build-core
+subset of the original distribution, not every upstream example/build file.
+The vendored source has not been modified.
+
+Both ELFs print `RT_META`, `RT_CASE`, and `RT_RESULT` records with
+an explicit implementation field (`zlib-1.3.2` or `zlib-ng-mmi`).
+**Both implementations** must pass input-byte-for-byte verification
+before reporting their rate. The original ELF shows the current
+`C xx.xx MB/s | D yy.yy MB/s` on its own GS screen.
+
+Build and copy, from the repository root:
+
+```sh
+bash test/ps2/build.sh
+mkdir -p "$HOME/elfs"
+cp -f build-ps2-mmi/zlib_ng_mmi.elf "$HOME/elfs/"
+cp -f build-ps2-mmi/zlib_original.elf "$HOME/elfs/"
+```
+
+Capture each ELF's **complete stdout** to a separate file, and compare
+the *same* 36 cases on host:
+
+```sh
+python3 test/ps2/compare_roundtrip.py zlib_original.log zlib_ng_mmi.log
+```
+
+Printed C and D ratios are `zlib-ng MMI MB/s / original zlib MB/s`.
+Ratios over 1.0 mean zlib-ng's end-to-end operation runs faster.
+The comparison script checks all 36 cases, correct implementation labels,
+matching repeat counts and valid clock values; mismatched cases are errors.
+
+**Fairness/corrections:** The original and zlib-ng **compress** their
+same source bytes independently. Their compressed sizes may differ, so
+the **decompression** figures do not by themselves prove that one
+inflate engine is faster *on an identical compressed stream*. Those
+numbers measure each codec's own full roundtrip. This is a two-way
+**original-zlib vs zlib-ng-MMI** comparison, NOT a three-way scalar
+zlib-ng baseline. A future decoder-isolation experiment should use
+a single precompressed fixture in both ELFs. The GS's mixed kernel
+winner cannot substitute for whole-stream throughput.
+
+The `slide_hash` load4 microkernel won **5.61x** on the supplied real
+PS2 log, but `slide_interleaved=OFF` in that build, so do not credit
+the 5.61x to whole-stream zlib-ng. The scalar/serial/load2/load4
+microkernel contest remains available separately. `crc32_braid` and
+`table256` are **non-Chorba** reference methods; `small300` and
+`dense4_5869` are experimental Chorba-family polynomials with
+size-dependent wins, *not* default runtime routes. As with any kernel
+microbenchmark, include allocation and workspace costs before using
+a speed claim for production.
+
+Host regression (no PS2SDK needed):
+
+```sh
+sh test/ps2/test_stock_zlib_host.sh
+python3 test/ps2/test_compare_roundtrip.py
+sh test/ps2/test_rank_host.sh
+```
+
+---
+
 
 ## October 2026: fairer R5900 A/B harness (branch ps2-ee-mmi)
 
@@ -40,8 +117,9 @@ green restricted to the word PASS. The implementation label
 `zlib-ng-mmi-build` means the MMI-capable library was linked, **not**
 that every function took its MMI route.
 
-This is **not yet** a three-way original-zlib/zlib-ng-scalar/zlib-ng-MMI
-end-to-end A/B harness. To compare absolute PS2 performance across
+This is now a two-way original-zlib/zlib-ng-MMI end-to-end A/B
+harness with separate ELFs. A scalar zlib-ng configuration remains
+an independent future baseline. To compare absolute PS2 performance across
 binaries, capture the `RT_CASE` CSV from identically configured scalar
 and MMI builds; a stock-zlib build must use the same pattern generator,
 level, input length, byte numerator and timer resolution. Cross-ELF
@@ -100,7 +178,7 @@ Build (PS2SDK already configured):
 
 ```sh
 bash test/ps2/build.sh
-# only build-ps2-mmi/zlib_ng_mmi.elf is generated
+# build-ps2-mmi/zlib_ng_mmi.elf AND zlib_original.elf are generated
 ```
 
 `QUICK` is the default; `--full` increases repetitions. Neither
