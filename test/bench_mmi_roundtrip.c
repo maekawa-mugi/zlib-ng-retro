@@ -95,7 +95,7 @@ int main(void) {
                 ps2_bench_check(0, status == Z_OK);
                 if (status != Z_OK) {
                     mmi_stress_fail("RT_FAIL,compress_reference,%u,%d,%lu,%d\n",
-                                    RT_IMPL_NAME,pattern,level,(unsigned long)len,status);
+                                    pattern,level,(unsigned long)len,status);
                     outcome = 1; break;
                 }
                 status = PREFIX(uncompress)(unpacked,&decoded,packed,used);
@@ -171,7 +171,7 @@ int main(void) {
                 ps2_bench_ticks(1,(clock_t)med_d);
                 printf("RT_CASE,%s,%u,%d,%lu,%lu,%u,"
                        "%.3f,%.3f,%.6f,%.6f\n",
-                       pattern,level,(unsigned long)len,
+                       RT_IMPL_NAME,pattern,level,(unsigned long)len,
                        (unsigned long)used,count,med_c,med_d,rate_c,rate_d);
                 ps2_bench_roundtrip_rate(pattern,(unsigned)level,len,
                                          rate_c,rate_d);
