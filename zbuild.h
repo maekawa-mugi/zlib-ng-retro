@@ -356,4 +356,15 @@
 #  define OPTIMAL_CMP 16
 #endif
 
+
+/* Bulk copies (window slides, stored blocks, pending output, input reads):
+ * the R5900 hand-written copy is several times faster than libc memcpy when
+ * the alignments differ. Non-overlapping, like memcpy. */
+#ifdef MIPS_MMI_BULK_MEMCPY
+void *zng_mmi_memcpy(void *dst, const void *src, size_t n);
+#  define ZNG_BULK_MEMCPY zng_mmi_memcpy
+#else
+#  define ZNG_BULK_MEMCPY memcpy
+#endif
+
 #endif

@@ -344,7 +344,7 @@ static void updatewindow(PREFIX3(stream) *strm, const uint8_t *end, uint32_t len
                 inf_chksum(strm, end - len, len - state->wsize);
             inf_chksum_cpy(strm, state->window, end - state->wsize, state->wsize);
         } else {
-            memcpy(state->window, end - state->wsize, state->wsize);
+            ZNG_BULK_MEMCPY(state->window, end - state->wsize, state->wsize);
         }
 
         state->wnext = 0;
@@ -357,14 +357,14 @@ static void updatewindow(PREFIX3(stream) *strm, const uint8_t *end, uint32_t len
         if (INFLATE_NEED_CHECKSUM(strm) && cksum) {
             inf_chksum_cpy(strm, state->window + state->wnext, end - len, dist);
         } else {
-            memcpy(state->window + state->wnext, end - len, dist);
+            ZNG_BULK_MEMCPY(state->window + state->wnext, end - len, dist);
         }
         len -= dist;
         if (len) {
             if (INFLATE_NEED_CHECKSUM(strm) && cksum) {
                 inf_chksum_cpy(strm, state->window, end - len, len);
             } else {
-                memcpy(state->window, end - len, len);
+                ZNG_BULK_MEMCPY(state->window, end - len, len);
             }
 
             state->wnext = len;
@@ -786,7 +786,7 @@ int32_t Z_EXPORT PREFIX(inflate)(PREFIX3(stream) *strm, int32_t flush) {
                 copy = MIN(copy, left);
                 if (copy == 0)
                     goto inf_leave;
-                memcpy(put, next, copy);
+                ZNG_BULK_MEMCPY(put, next, copy);
                 have -= copy;
                 next += copy;
                 left -= copy;

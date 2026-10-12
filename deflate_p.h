@@ -132,7 +132,7 @@ Z_FORCEINLINE static void flush_pending_inline(PREFIX3(stream) *strm) {
         return;
 
     Tracev((stderr, "[FLUSH]"));
-    memcpy(strm->next_out, s->pending_out, len);
+    ZNG_BULK_MEMCPY(strm->next_out, s->pending_out, len);
     strm->next_out  += len;
     s->pending_out  += len;
     strm->total_out += len;
@@ -166,7 +166,7 @@ Z_FORCEINLINE static unsigned read_buf(PREFIX3(stream) *strm, unsigned char *buf
         return 0;
 
     if (!DEFLATE_NEED_CHECKSUM(strm)) {
-        memcpy(buf, strm->next_in, len);
+        ZNG_BULK_MEMCPY(buf, strm->next_in, len);
 #ifdef GZIP
     } else if (s->wrap == 2) {
         strm->adler = FUNCTABLE_CALL(crc32_copy)(strm->adler, buf, strm->next_in, len);
@@ -174,7 +174,7 @@ Z_FORCEINLINE static unsigned read_buf(PREFIX3(stream) *strm, unsigned char *buf
     } else if (s->wrap == 1) {
         strm->adler = FUNCTABLE_CALL(adler32_copy)(strm->adler, buf, strm->next_in, len);
     } else {
-        memcpy(buf, strm->next_in, len);
+        ZNG_BULK_MEMCPY(buf, strm->next_in, len);
     }
 
     strm->avail_in -= len;

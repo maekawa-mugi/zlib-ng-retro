@@ -78,7 +78,7 @@ Z_INTERNAL block_state deflate_stored(deflate_state *s, int flush) {
         /* Copy uncompressed bytes from the window to next_out. */
         if (left) {
             left = MIN(left, len);
-            memcpy(s->strm->next_out, window + s->block_start, left);
+            ZNG_BULK_MEMCPY(s->strm->next_out, window + s->block_start, left);
             s->strm->next_out += left;
             s->strm->avail_out -= left;
             s->strm->total_out += left;
@@ -110,17 +110,17 @@ Z_INTERNAL block_state deflate_stored(deflate_state *s, int flush) {
          * therefore s->block_start == s->strstart.
          */
         if (used >= w_size) {    /* supplant the previous history */
-            memcpy(window, s->strm->next_in - w_size, w_size);
+            ZNG_BULK_MEMCPY(window, s->strm->next_in - w_size, w_size);
             s->strstart = w_size;
             s->insert = s->strstart;
         } else {
             if (s->window_size - s->strstart <= used) {
                 /* Slide the window down. */
                 s->strstart -= w_size;
-                memcpy(window, window + w_size, s->strstart);
+                ZNG_BULK_MEMCPY(window, window + w_size, s->strstart);
                 s->insert = MIN(s->insert, s->strstart);
             }
-            memcpy(window + s->strstart, s->strm->next_in - used, used);
+            ZNG_BULK_MEMCPY(window + s->strstart, s->strm->next_in - used, used);
             s->strstart += used;
             s->insert += MIN(used, w_size - s->insert);
         }
@@ -144,7 +144,7 @@ Z_INTERNAL block_state deflate_stored(deflate_state *s, int flush) {
         /* Slide the window down. */
         s->block_start -= (int)w_size;
         s->strstart -= w_size;
-        memcpy(window, window + w_size, s->strstart);
+        ZNG_BULK_MEMCPY(window, window + w_size, s->strstart);
         have += w_size;          /* more space now */
         s->insert = MIN(s->insert, s->strstart);
     }

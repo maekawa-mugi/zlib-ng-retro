@@ -1267,7 +1267,7 @@ void Z_INTERNAL PREFIX(fill_window)(deflate_state *s) {
          * move the upper half to the lower one to make room in the upper half.
          */
         if (s->strstart >= wsize+MAX_DIST(s)) {
-            memcpy(window, window + wsize, (unsigned)wsize);
+            ZNG_BULK_MEMCPY(window, window + wsize, (unsigned)wsize);
             if (s->match_start >= wsize) {
                 s->match_start -= wsize;
             } else {
